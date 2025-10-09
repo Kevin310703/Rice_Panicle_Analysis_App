@@ -17,7 +17,7 @@ class AppTextStyle {
   );
 
   static TextStyle h3 = GoogleFonts.poppins(
-    fontSize: 13,
+    fontSize: 18,
     fontWeight: FontWeight.w600,
   );
 

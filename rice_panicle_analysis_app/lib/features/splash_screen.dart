@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
-import 'package:rice_panicle_analysis_app/views/main_screen.dart';
-import 'package:rice_panicle_analysis_app/views/onboarding_screen.dart';
-import 'package:rice_panicle_analysis_app/views/signin_screen.dart';
+import 'package:rice_panicle_analysis_app/features/main_screen.dart';
+import 'package:rice_panicle_analysis_app/features/onboarding_screen.dart';
+import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 
 class SplashScreen extends StatelessWidget {
   SplashScreen({super.key});
@@ -18,7 +18,7 @@ class SplashScreen extends StatelessWidget {
       } else if (authController.isLoggedIn) {
         Get.off(() => const MainScreen());
       } else {
-        Get.off(() => const SigninScreen());
+        Get.off(() => SigninScreen());
       }
     });
 
