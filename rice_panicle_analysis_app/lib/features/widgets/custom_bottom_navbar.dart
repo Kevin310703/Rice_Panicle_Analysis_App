@@ -17,15 +17,19 @@ class CustomBottomNavbar extends StatelessWidget {
         },
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home),
+            icon: Icon(Icons.home_outlined),
             label: 'Home',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.folder),
-            label: 'Projects',
+            icon: Icon(Icons.folder_outlined),
+            label: 'Project',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_circle),
+            icon: Icon(Icons.bookmark_add_outlined),
+            label: 'Bookmark',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.person_outline),
             label: 'Account',
           ),
         ],

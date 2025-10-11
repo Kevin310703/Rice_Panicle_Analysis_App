@@ -12,7 +12,6 @@ class AccountScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final screenSize = MediaQuery.of(context).size;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
@@ -121,6 +120,7 @@ class AccountScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
+                  // ignore: deprecated_member_use
                   color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
@@ -177,6 +177,7 @@ class AccountScreen extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
+                // ignore: deprecated_member_use
                 color: Theme.of(context).primaryColor.withOpacity(0.1),
                 shape: BoxShape.circle,
               ),

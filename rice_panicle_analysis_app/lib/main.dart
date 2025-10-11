@@ -8,7 +8,7 @@ import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
 import 'package:rice_panicle_analysis_app/utils/app_themes.dart';
 import 'package:rice_panicle_analysis_app/features/splash_screen.dart';
 
-void main() async{
+void main() async {
   await GetStorage.init();
   Get.put(ThemeController());
   Get.put(AuthController());
@@ -24,7 +24,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final themeController = Get.find<ThemeController>();
     return GetMaterialApp(
-      title: 'Flutter Demo',
+      title: 'Rice Panicle Analysis App',
       theme: AppThemes.light,
       darkTheme: AppThemes.dark,
       themeMode: themeController.theme,
