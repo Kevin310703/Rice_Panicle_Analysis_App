@@ -13,7 +13,7 @@ class ProjectCard extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return InkWell(
-      onTap: () => Get.to(() => ProjectDetailsScreen(project: project,)),
+      onTap: () => Get.to(() => ProjectDetailsScreen(project: project)),
       borderRadius: BorderRadius.circular(12),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),

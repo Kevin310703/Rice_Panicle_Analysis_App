@@ -1,6 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
 

@@ -32,7 +32,7 @@ class FileGrid extends StatelessWidget {
               color: isDark ? Colors.grey[800] : Colors.grey[200],
             ),
             child: type == 'image'
-                ? Image.asset(
+                ? Image.network(
                     file,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
@@ -42,6 +42,18 @@ class FileGrid extends StatelessWidget {
                           style: TextStyle(
                             color: isDark ? Colors.white : Colors.black,
                           ),
+                        ),
+                      );
+                    },
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+
+                      return Center(
+                        child: CircularProgressIndicator(
+                          value: loadingProgress.expectedTotalBytes != null
+                              ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                              : null,
                         ),
                       );
                     },

@@ -47,6 +47,7 @@ class AccountScreen extends StatelessWidget {
 
   Widget _buildProfileSection(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final AuthController authController = Get.find<AuthController>();
 
     return Container(
       width: double.infinity,
@@ -62,19 +63,23 @@ class AccountScreen extends StatelessWidget {
             backgroundImage: AssetImage('assets/images/avatar.png'),
           ),
           const SizedBox(height: 16),
-          Text(
-            'Chu Viet Kien',
-            style: AppTextStyle.withColor(
-              AppTextStyle.h2,
-              Theme.of(context).textTheme.bodyLarge!.color!,
+          Obx(
+            () => Text(
+              authController.userName ?? "User",
+              style: AppTextStyle.withColor(
+                AppTextStyle.h2,
+                Theme.of(context).textTheme.bodyLarge!.color!,
+              ),
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            'Chuvietkien@gmail.com',
-            style: AppTextStyle.withColor(
-              AppTextStyle.h3,
-              isDark ? Colors.grey[400]! : Colors.grey[600]!,
+          Obx(
+            () => Text(
+              authController.userEmail ?? "abc@gmail.com",
+              style: AppTextStyle.withColor(
+                AppTextStyle.bodyMedium,
+                isDark ? Colors.grey[400]! : Colors.grey[600]!,
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -121,11 +126,13 @@ class AccountScreen extends StatelessWidget {
               boxShadow: [
                 BoxShadow(
                   // ignore: deprecated_member_use
-                  color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey.withOpacity(0.1),
+                  color: isDark
+                      ? Colors.black.withOpacity(0.2)
+                      : Colors.grey.withOpacity(0.1),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
-              ]
+              ],
             ),
             child: ListTile(
               leading: Icon(
@@ -144,7 +151,7 @@ class AccountScreen extends StatelessWidget {
                 color: isDark ? Colors.grey[400] : Colors.grey[600],
               ),
               onTap: () {
-                if(item['title'] == 'Logout') {
+                if (item['title'] == 'Logout') {
                   _showLogoutDialog(context);
                 } else if (item['title'] == 'Change Password') {
                   Get.to(() => HelpCenterScreen());
@@ -154,7 +161,7 @@ class AccountScreen extends StatelessWidget {
                   Get.to(() => HelpCenterScreen());
                 }
               },
-            )
+            ),
           );
         }).toList(),
       ),
@@ -167,10 +174,11 @@ class AccountScreen extends StatelessWidget {
     Get.dialog(
       AlertDialog(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 24,
+          vertical: 20,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -204,7 +212,9 @@ class AccountScreen extends StatelessWidget {
                       Get.back();
                     },
                     style: OutlinedButton.styleFrom(
-                      side: BorderSide(color: isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                      side: BorderSide(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),
                       ),
@@ -222,11 +232,51 @@ class AccountScreen extends StatelessWidget {
                 const SizedBox(width: 16),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
-                      // Handle logout logic here
-                      final AuthController authController = Get.find<AuthController>();
-                      authController.logout();
-                      Get.offAll(() => SigninScreen());
+                    onPressed: () async {
+                      final AuthController authController =
+                          Get.find<AuthController>();
+
+                      // Show loading indicator
+                      Get.dialog(
+                        const Center(child: CircularProgressIndicator()),
+                        barrierDismissible: false,
+                      );
+
+                      try {
+                        final result = await authController.signOut();
+
+                        // Close loading dialog
+                        Get.back();
+
+                        if (result.success) {
+                          Get.snackbar(
+                            'Success',
+                            result.message,
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.green,
+                            colorText: Colors.white,
+                          );
+                          Get.offAll(() => SigninScreen());
+                        } else {
+                          Get.snackbar(
+                            'Error',
+                            result.message,
+                            snackPosition: SnackPosition.BOTTOM,
+                            backgroundColor: Colors.red,
+                            colorText: Colors.white,
+                          );
+                        }
+                      } catch (e) {
+                        // Close loading dialog
+                        Get.back();
+                        Get.snackbar(
+                          'Error',
+                          'An unexpected error occured. PLease try again.',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: Colors.green,
+                          colorText: Colors.white,
+                        );
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Theme.of(context).primaryColor,
@@ -246,7 +296,7 @@ class AccountScreen extends StatelessWidget {
                   ),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

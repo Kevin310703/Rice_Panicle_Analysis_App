@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:get/get.dart';
+import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
+import 'package:rice_panicle_analysis_app/features/my_projects/views/screens/create_project_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/category_chips.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/filter_bottom_sheet.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
@@ -45,26 +48,89 @@ class ListProjectScreen extends StatelessWidget {
         children: [
           Padding(padding: EdgeInsets.only(top: 16), child: CategoryChips()),
           Expanded(
-            child: ListView.builder(
-              itemBuilder: (context, index) {
-                return ProjectCard(project: projects[index]);
+            child: GetBuilder<ProjectController>(
+              builder: (projectController) {
+                if (projectController.isLoading) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (projectController.hasError) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          projectController.errorMessage,
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => projectController.refreshProjects(),
+                          child: const Text('Retry'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final displayProjects = projectController.getDisplayProjects();
+
+                if (displayProjects.isEmpty) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.folder_off_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No projects availabel',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => projectController.refreshProjects(),
+                          child: const Text('Refresh'),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemBuilder: (context, index) {
+                    return ProjectCard(project: displayProjects[index]);
+                  },
+                  padding: const EdgeInsets.all(12),
+                  itemCount: displayProjects.length,
+                );
               },
-              padding: const EdgeInsets.all(12),
-              itemCount: projects.length,
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () {
-          // Thêm logic để tạo mới dự án (ví dụ: chuyển đến màn hình tạo dự án)
-          print('Create new project');
-        },
+        onPressed: () => Get.to(() => CreateProjectScreen()),
         backgroundColor: Theme.of(context).primaryColor,
-        child: IconButton(
-          icon: const Icon(Icons.add),
+        child: Icon(
+          Icons.add,
           color: isDark ? Colors.white : Colors.black,
-          onPressed: () => Navigator.pop(context),
         ),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,

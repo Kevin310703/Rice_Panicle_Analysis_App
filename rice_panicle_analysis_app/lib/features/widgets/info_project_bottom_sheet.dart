@@ -36,7 +36,7 @@ class InfoProjectBottomSheet {
               ],
             ),
             const SizedBox(height: 24),
-            _buildInfoItem(context, 'Project Number', project.projectNumber),
+            _buildInfoItem(context, 'Project Number', project.id),
             _buildInfoItem(context, 'Project Name', project.projectName),
             _buildInfoItem(context, 'Description', project.description),
             _buildInfoItem(

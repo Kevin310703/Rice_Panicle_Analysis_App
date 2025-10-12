@@ -1,18 +1,26 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/instance_manager.dart';
 import 'package:get/route_manager.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/navigation_controller.dart';
+import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
+import 'package:rice_panicle_analysis_app/firebase_options.dart';
 import 'package:rice_panicle_analysis_app/utils/app_themes.dart';
 import 'package:rice_panicle_analysis_app/features/splash_screen.dart';
 
 void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   await GetStorage.init();
   Get.put(ThemeController());
   Get.put(AuthController());
   Get.put(NavigationController());
+  Get.put(ProjectController());
   runApp(const MyApp());
 }
 

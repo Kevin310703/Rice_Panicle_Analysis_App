@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
-import 'package:rice_panicle_analysis_app/features/main_screen.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_textfield.dart';
 
@@ -126,7 +126,7 @@ class SignUpScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () => Get.off(() => MainScreen()),
+                  onPressed: _handleSignUp,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -174,5 +174,153 @@ class SignUpScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Sign up button onpressed handler
+  void _handleSignUp() async {
+    // Validate input fields
+    if (_fullNameController.text.trim().isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Please enter your full-name',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_emailController.text.trim().isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Please enter your email',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_passwordController.text.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Please enter your password',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_passwordController.text.length < 6) {
+      Get.snackbar(
+        'Error',
+        'Password must be at least 6 characters',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_confirmPasswordController.text.isEmpty) {
+      Get.snackbar(
+        'Error',
+        'Please enter your password',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_confirmPasswordController.text.length < 6) {
+      Get.snackbar(
+        'Error',
+        'Password must be at least 6 characters',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (_confirmPasswordController.text != _passwordController.text) {
+      Get.snackbar(
+        'Error',
+        'Passwords do not match',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    if (!GetUtils.isEmail(_emailController.text.trim())) {
+      Get.snackbar(
+        'Error',
+        'Please enter a valid email address',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+
+      return;
+    }
+
+    final AuthController authController = Get.find<AuthController>();
+
+    // Show loading indicator
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+
+    try {
+      final result = await authController.signUp(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        name: _fullNameController.text.trim(),
+      );
+
+      // Close loading dialog
+      Get.back();
+
+      if (!result.success) {
+        Get.snackbar(
+          'Error',
+          result.message,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+        );
+      } else {
+        Get.snackbar(
+          'Success',
+          result.message,
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.green,
+          colorText: Colors.white,
+        );
+        Get.offAll(() => SigninScreen());
+      }
+    } catch (e) {
+      // Close loading dialog
+      Get.back();
+      Get.snackbar(
+        'Error',
+        'An unexpected error occured. PLease try again.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+      );
+    }
   }
 }

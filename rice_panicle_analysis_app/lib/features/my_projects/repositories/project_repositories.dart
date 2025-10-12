@@ -4,7 +4,7 @@ class ProjectRepositories {
   List<Project> getProjects() {
     return [
       Project(
-        projectNumber: '123',
+        id: '123',
         projectName: 'Rice Variety A - Spring 2024',
         description: 'A project about rice in Vietnam',
         status: ProjectStatus.completed,
@@ -14,7 +14,7 @@ class ProjectRepositories {
         analyses: ['analysis1.json', 'analysis2.json'],
       ),
       Project(
-        projectNumber: '456',
+        id: '456',
         projectName: 'Hybrid Rice Study',
         description: 'A project about rice in China',
         status: ProjectStatus.active,
@@ -24,7 +24,7 @@ class ProjectRepositories {
         analyses: ['analysis3.json', 'analysis4.json', 'analysis5.json'],
       ),
       Project(
-        projectNumber: '789',
+        id: '789',
         projectName: 'Drought Resistance Test',
         description: 'A project about rice in India',
         status: ProjectStatus.cancelled,

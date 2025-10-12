@@ -5,23 +5,38 @@ import 'package:rice_panicle_analysis_app/features/main_screen.dart';
 import 'package:rice_panicle_analysis_app/features/onboarding_screen.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
   final AuthController authController = Get.find<AuthController>();
 
   @override
-  Widget build(BuildContext context) {
-    // Navigate bases on auth state after 2.5 seconds
-    Future.delayed(const Duration(milliseconds: 2500), () {
-      if (authController.isFirstTime) {
-        Get.off(() => const OnboardingScreen());
-      } else if (authController.isLoggedIn) {
-        Get.off(() => const MainScreen());
-      } else {
-        Get.off(() => SigninScreen());
-      }
-    });
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
 
+  void _initializeApp() async {
+    // Wait for Firebase auth state to be determined
+    await Future.delayed(const Duration(milliseconds: 2500));
+
+    // Navigate based on auth state
+    if (authController.isFirstTime) {
+      Get.off(() => const OnboardingScreen());
+    } else if (authController.isLoggedIn) {
+      Get.off(() => const MainScreen());
+    } else {
+      Get.off(() => SigninScreen());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(

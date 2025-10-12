@@ -10,6 +10,8 @@ class CustomTextfield extends StatefulWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
   final String? initialValue;
+  final int? maxLines;
+  final int? minLines;
 
   const CustomTextfield({
     super.key,
@@ -21,6 +23,8 @@ class CustomTextfield extends StatefulWidget {
     this.validator,
     this.onChanged,
     this.initialValue,
+    this.maxLines,
+    this.minLines,
   });
 
   @override
@@ -41,6 +45,8 @@ class _CustomTextfieldState extends State<CustomTextfield> {
       obscureText: widget.isPassword && _obscureText,
       validator: widget.validator,
       onChanged: widget.onChanged,
+      maxLines: widget.maxLines ?? 1, // Mặc định 1 dòng nếu không chỉ định
+      minLines: widget.minLines ?? 1,
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: AppTextStyle.withColor(

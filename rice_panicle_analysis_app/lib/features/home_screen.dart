@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:get/get_state_manager/get_state_manager.dart';
+import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
 import 'package:rice_panicle_analysis_app/features/notifications/views/notifications_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_search_bar.dart';
@@ -25,11 +26,11 @@ class HomeScreen extends StatelessWidget {
                     backgroundImage: AssetImage('assets/images/avatar.png'),
                   ),
                   SizedBox(width: 12),
-                  Column(
+                  Expanded(child: GetX<AuthController>(builder: (authController) => Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Hello, Viet Kien',
+                        'Hello, ${authController.userName ?? 'User'}',
                         style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                       ),
                       Text(
@@ -40,7 +41,8 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                     ],
-                  ),
+                  ),)),
+                  
                   Spacer(),
                   // Notification icon
                   IconButton(

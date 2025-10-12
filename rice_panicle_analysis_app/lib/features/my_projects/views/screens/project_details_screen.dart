@@ -54,7 +54,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
               ),
               onPressed: () => _shareProject(
                 context,
-                _project.projectNumber,
+                _project.id,
                 _project.projectName,
                 _project.description,
               ),
@@ -339,7 +339,7 @@ extension ProjectExtension on Project {
     List<String>? analyses,
   }) {
     return Project(
-      projectNumber: projectNumber ?? this.projectNumber,
+      id: projectNumber ?? this.id,
       projectName: projectName ?? this.projectName,
       description: description ?? this.description,
       status: status ?? this.status,
