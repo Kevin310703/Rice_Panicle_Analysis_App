@@ -44,4 +44,13 @@
     </queries>
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <!-- Quyền truy cập bộ nhớ (cho Android 9 trở xuống) -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Quyền truy cập bộ nhớ (cho Android 10 trở lên, dùng Scoped Storage) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" android:maxSdkVersion="32" />
+    <!-- Quyền truy cập ảnh và video (Android 13 trở lên) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
 </manifest>

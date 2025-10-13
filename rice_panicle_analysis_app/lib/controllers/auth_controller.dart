@@ -2,7 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:rice_panicle_analysis_app/services/firebase_auth_service.dart';
-import 'package:rice_panicle_analysis_app/services/firestore_service.dart';
+import 'package:rice_panicle_analysis_app/services/user_firestore_service.dart';
 
 class AuthController extends GetxController {
   final _storage = GetStorage();

@@ -17,7 +17,7 @@ class Project {
     required this.id,
     required this.projectName,
     required this.description,
-    this.status = ProjectStatus.active,
+    required this.status,
     this.createdAt,
     this.updatedAt,
     this.isBookmark = false,
@@ -26,7 +26,50 @@ class Project {
   });
 
   String get statusString => status.name;
-  
+
+  // Tạo từ DocumentSnapshot (khuyến nghị)
+  factory Project.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
+    final data = doc.data() ?? {};
+    final statusRaw = (data['status'] as String?) ?? 'active';
+    // chấp nhận cả 'ProjectStatus.active' cũ
+    final normalized = statusRaw.contains('.')
+        ? statusRaw.split('.').last
+        : statusRaw;
+
+    Timestamp? cAt = data['createdAt'] as Timestamp?;
+    Timestamp? uAt = data['updatedAt'] as Timestamp?;
+
+    return Project(
+      id: doc.id,
+      projectName: data['projectName'] as String? ?? '',
+      description: data['description'] as String? ?? '',
+      status: ProjectStatus.values.firstWhere(
+        (e) => e.name == normalized,
+        orElse: () => ProjectStatus.active,
+      ),
+      images: List<String>.from(data['images'] ?? const []),
+      analyses: List<String>.from(data['analyses'] ?? const []),
+      isBookmark: data['isBookmark'] as bool? ?? false,
+      createdAt: cAt?.toDate(),
+      updatedAt: uAt?.toDate(),
+    );
+  }
+
+  /// Dùng khi **tạo mới**: set createdAt/updatedAt là server time.
+  Map<String, dynamic> toFirestoreForCreate() {
+    return {
+      // 'id': id, // không cần
+      'projectName': projectName,
+      'description': description,
+      'status': status.name, // <-- quan trọng
+      'images': images,
+      'analyses': analyses,
+      'isBookmark': isBookmark,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+  }
+
   // Create project from Firestore document
   factory Project.fromFirestore(Map<String, dynamic> data, String id) {
     return Project(
@@ -51,7 +94,7 @@ class Project {
       'id': id,
       'projectName': projectName,
       'description': description,
-      'status': status.toString(),
+      'status': status.name,
       'images': images,
       'analyses': analyses,
       'isBookmark': isBookmark,
@@ -103,4 +146,27 @@ class Project {
       analyses: ['analysis7.json'],
     ),
   ];
+
+  Project copyWith({
+    String? projectName,
+    String? description,
+    ProjectStatus? status,
+    bool? isBookmark,
+    List<String>? images,
+    List<String>? analyses,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Project(
+      id: id,
+      projectName: projectName ?? this.projectName,
+      description: description ?? this.description,
+      status: status ?? this.status,
+      isBookmark: isBookmark ?? this.isBookmark,
+      images: images ?? this.images,
+      analyses: analyses ?? this.analyses,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
 }

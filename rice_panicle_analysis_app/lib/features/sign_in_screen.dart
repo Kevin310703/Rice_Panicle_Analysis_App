@@ -229,7 +229,7 @@ class SigninScreen extends StatelessWidget {
         'Error',
         'An unexpected error occured. PLease try again.',
         snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.green,
+        backgroundColor: Colors.red,
         colorText: Colors.white,
       );
     }

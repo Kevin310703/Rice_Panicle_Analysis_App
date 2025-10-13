@@ -1,6 +1,7 @@
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
 import 'package:rice_panicle_analysis_app/services/project_firestore_service.dart';
+import 'package:share_plus/share_plus.dart';
 
 class ProjectController extends GetxController {
   final RxList<Project> _allProjects = <Project>[].obs;
@@ -154,30 +155,60 @@ class ProjectController extends GetxController {
   }
 
   // Create a new project
-  Future<void> createProject(Project project) async {
+  Future<ProjectResult> createProject(Project project) async {
     _isLoading.value = true;
     try {
-      await ProjectFirestoreService.createProject(project);
+      final result = await ProjectFirestoreService.createProject(project);
       await loadProjects(); // Refresh the project list
+      return result;
     } catch (e) {
       _hasError.value = true;
       _errorMessage.value = 'Failed to create project. Please try again.';
       print('Error creating project: $e');
+      throw Exception('Failed to create project');
     } finally {
       _isLoading.value = false;
     }
   }
 
   // Delete a project
-  Future<void> deleteProject(String projectId) async {
+  Future<ProjectResult> deleteProject(String projectId) async {
     _isLoading.value = true;
     try {
-      await ProjectFirestoreService.deleteProject(projectId);
+      final result = await ProjectFirestoreService.deleteProject(projectId);
       await loadProjects(); // Refresh the project list
+      return result;
     } catch (e) {
       _hasError.value = true;
       _errorMessage.value = 'Failed to delete project. Please try again.';
       print('Error deleting project: $e');
+      throw Exception('Failed to delete project');
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  // Upload image and file
+  Future<ProjectResult> uploadFileForProject(
+    XFile file,
+    String type,
+    String projectId,
+  ) async {
+    _isLoading.value = true;
+    try {
+      final result = await ProjectFirestoreService.uploadFileForProject(
+        file: file,
+        type: type,
+        uid: projectId,
+      );
+      await loadProjects(); // Refresh the project list
+      return result;
+    } catch (e) {
+      _hasError.value = true;
+      _errorMessage.value =
+          'Failed to upload file for project. Please try again.';
+      print('Error upload file for project: $e');
+      throw Exception('Failed to upload file for project');
     } finally {
       _isLoading.value = false;
     }

@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:rice_panicle_analysis_app/services/firestore_service.dart';
+import 'package:rice_panicle_analysis_app/services/user_firestore_service.dart';
 
 class FirebaseAuthService {
   static final FirebaseAuth _auth = FirebaseAuth.instance;

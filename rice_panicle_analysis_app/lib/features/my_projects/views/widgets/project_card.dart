@@ -159,7 +159,7 @@ class ProjectCard extends StatelessWidget {
       case ProjectStatus.inProgress:
         return Icons.autorenew_rounded;
       case ProjectStatus.completed:
-        return Icons.check_circle_rounded;
+        return Icons.task_alt;
       case ProjectStatus.cancelled:
         return Icons.cancel_rounded;
       default:
