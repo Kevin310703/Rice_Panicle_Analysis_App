@@ -22,7 +22,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   void _initializeApp() async {
-    // Wait for Firebase auth state to be determined
+    // Wait for Supabase auth state to be determined
     await Future.delayed(const Duration(milliseconds: 2500));
 
     // Navigate based on auth state
@@ -114,7 +114,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     child: Column(
                       children: [
                         Text(
-                          'Rice Panicle Analysis',
+                          'GrainCount AI',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 32,

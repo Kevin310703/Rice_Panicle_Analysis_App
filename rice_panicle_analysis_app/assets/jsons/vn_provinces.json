@@ -1,0 +1,242 @@
+{
+  "provinces": [
+    {
+      "code": "01",
+      "name": "Thành phố Hà Nội",
+      "englishName": "Hanoi City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": ""
+    },
+    {
+      "code": "04",
+      "name": "Tỉnh Cao Bằng",
+      "englishName": "Cao Bang Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "08",
+      "name": "Tỉnh Tuyên Quang",
+      "englishName": "Tuyen Quang Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "11",
+      "name": "Tỉnh Điện Biên",
+      "englishName": "Dien Bien Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "12",
+      "name": "Tỉnh Lai Châu",
+      "englishName": "Lai Chau Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "14",
+      "name": "Tỉnh Sơn La",
+      "englishName": "Son La Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "15",
+      "name": "Tỉnh Lào Cai",
+      "englishName": "Lao Cai Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "19",
+      "name": "Tỉnh Thái Nguyên",
+      "englishName": "Thai Nguyen Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "20",
+      "name": "Tỉnh Lạng Sơn",
+      "englishName": "Lang Son Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "22",
+      "name": "Tỉnh Quảng Ninh",
+      "englishName": "Quang Ninh Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "24",
+      "name": "Tỉnh Bắc Ninh",
+      "englishName": "Bac Ninh Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "25",
+      "name": "Tỉnh Phú Thọ",
+      "englishName": "Phu Tho Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "31",
+      "name": "Thành phố Hải Phòng",
+      "englishName": "Hai Phong City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "33",
+      "name": "Tỉnh Hưng Yên",
+      "englishName": "Hung Yen Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "37",
+      "name": "Tỉnh Ninh Bình",
+      "englishName": "Ninh Binh Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "38",
+      "name": "Tỉnh Thanh Hóa",
+      "englishName": "Thanh Hoa Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "40",
+      "name": "Tỉnh Nghệ An",
+      "englishName": "Nghe An Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "42",
+      "name": "Tỉnh Hà Tĩnh",
+      "englishName": "Ha Tinh Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "44",
+      "name": "Tỉnh Quảng Trị",
+      "englishName": "Quang Tri Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "46",
+      "name": "Thành phố Huế",
+      "englishName": "Hue City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "48",
+      "name": "Thành phố Đà Nẵng",
+      "englishName": "Da Nang City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "51",
+      "name": "Tỉnh Quảng Ngãi",
+      "englishName": "Quang Ngai Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "52",
+      "name": "Tỉnh Gia Lai",
+      "englishName": "Gia Lai Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "56",
+      "name": "Tỉnh Khánh Hòa",
+      "englishName": "Khanh Hoa Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "66",
+      "name": "Tỉnh Đắk Lắk",
+      "englishName": "Dak Lak Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "68",
+      "name": "Tỉnh Lâm Đồng",
+      "englishName": "Lam Dong Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "75",
+      "name": "Tỉnh Đồng Nai",
+      "englishName": "Dong Nai Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "79",
+      "name": "Thành phố Hồ Chí Minh",
+      "englishName": "Ho Chi Minh City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "80",
+      "name": "Tỉnh Tây Ninh",
+      "englishName": "Tay Ninh Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "82",
+      "name": "Tỉnh Đồng Tháp",
+      "englishName": "Dong Thap Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "86",
+      "name": "Tỉnh Vĩnh Long",
+      "englishName": "Vinh Long Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "91",
+      "name": "Tỉnh An Giang",
+      "englishName": "An Giang Province",
+      "administrativeLevel": "Province",
+      "decree": ""
+    },
+    {
+      "code": "92",
+      "name": "Thành phố Cần Thơ",
+      "englishName": "Can Tho City",
+      "administrativeLevel": "Centrally Governed City",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    },
+    {
+      "code": "96",
+      "name": "Tỉnh Cà Mau",
+      "englishName": "Ca Mau Province",
+      "administrativeLevel": "Province",
+      "decree": "202/2025/QH15 - 12/06/2025"
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
+import 'package:rice_panicle_analysis_app/features/change_password_screen.dart';
 import 'package:rice_panicle_analysis_app/features/edit_profile/views/screens/edit_profile_screen.dart';
 import 'package:rice_panicle_analysis_app/features/help_center/views/screens/help_center_screen.dart';
+import 'package:rice_panicle_analysis_app/features/notifications/views/notifications_screen.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
 import 'package:rice_panicle_analysis_app/features/settings_screen.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
@@ -58,10 +60,31 @@ class AccountScreen extends StatelessWidget {
       ),
       child: Column(
         children: [
-          const CircleAvatar(
-            radius: 50,
-            backgroundImage: AssetImage('assets/images/avatar.png'),
-          ),
+          Obx(() {
+            final imageUrl = authController.userProfileImageUrl;
+            final ImageProvider avatarProvider;
+
+            if (imageUrl != null && imageUrl.startsWith('http')) {
+              avatarProvider = NetworkImage(imageUrl);
+            } else {
+              avatarProvider = AssetImage(
+                imageUrl ?? 'assets/images/avatar.png',
+              );
+            }
+
+            return CircleAvatar(
+              radius: 50,
+              backgroundColor: Theme.of(context).cardColor,
+              child: ClipOval(
+                child: Image(
+                  image: avatarProvider,
+                  fit: BoxFit.contain,
+                  width: 100,
+                  height: 100,
+                ),
+              ),
+            );
+          }),
           const SizedBox(height: 16),
           Obx(
             () => Text(
@@ -154,9 +177,9 @@ class AccountScreen extends StatelessWidget {
                 if (item['title'] == 'Logout') {
                   _showLogoutDialog(context);
                 } else if (item['title'] == 'Change Password') {
-                  Get.to(() => HelpCenterScreen());
+                  Get.to(() => ChangePasswordScreen());
                 } else if (item['title'] == 'Notifications') {
-                  Get.to(() => HelpCenterScreen());
+                  Get.to(() => NotificationsScreen());
                 } else if (item['title'] == 'Help & Support') {
                   Get.to(() => HelpCenterScreen());
                 }

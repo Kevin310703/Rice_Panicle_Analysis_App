@@ -21,7 +21,7 @@ class MyProjectsScreen extends StatelessWidget {
   }
 
   Widget _buildProjectList(BuildContext context, ProjectStatus status) {
-    final projects = _repositories.getProjectsByStatus(status);
+    _repositories.getProjectsByStatus(status);
 
     return GetBuilder<ProjectController>(
       builder: (projectController) {

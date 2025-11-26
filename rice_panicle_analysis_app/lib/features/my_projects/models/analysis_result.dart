@@ -1,75 +1,128 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class AnalysisResult {
   final String id;
-  final String imageName;
-  final double panicleLengthMm;
-  final double? grainLengthMm;
-  final double? grainWidthMm;
-  final double? aspectRatio;
-  final double pixelsPerMm;
-  final int numDetections;
-
-  // URL file xuất ra từ backend
-  final String skeletonImageUrl;
-  final String detectionOverlayUrl;
-
-  // sample crops/processed để hiển thị
-  final List<String> cropSampleUrls;
-  final List<String> processedSampleUrls;
-
-  final DateTime createdAt;
+  final String imageId;
+  final int grains;
+  final int primaryBranch;
+  final int totalSpikelets;
+  final double filledRatio;
+  final double confidence;
+  final String modelVersion;
+  final DateTime processedAt;
+  final String? boundingImageUrl;
+  final String? localBoundingImagePath;
+  final bool isSynced;
 
   const AnalysisResult({
     required this.id,
-    required this.imageName,
-    required this.panicleLengthMm,
-    required this.pixelsPerMm,
-    required this.numDetections,
-    required this.skeletonImageUrl,
-    required this.detectionOverlayUrl,
-    this.grainLengthMm,
-    this.grainWidthMm,
-    this.aspectRatio,
-    this.cropSampleUrls = const [],
-    this.processedSampleUrls = const [],
-    required this.createdAt,
+    required this.imageId,
+    required this.grains,
+    required this.primaryBranch,
+    required this.totalSpikelets,
+    required this.filledRatio,
+    required this.confidence,
+    required this.modelVersion,
+    required this.processedAt,
+    this.boundingImageUrl,
+    this.localBoundingImagePath,
+    this.isSynced = true,
   });
 
-  factory AnalysisResult.fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
-    final d = doc.data() ?? {};
-    final ts = d['createdAt'] as Timestamp?;
+  factory AnalysisResult.fromMap(Map<String, dynamic> data) {
+    double _toDouble(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? 0;
+    }
+
+    DateTime _parseDate(dynamic value) {
+      if (value is DateTime) return value;
+      return DateTime.parse(value.toString());
+    }
+
     return AnalysisResult(
-      id: doc.id,
-      imageName: d['image_name'] ?? '',
-      panicleLengthMm: (d['panicle_length_mm'] ?? 0).toDouble(),
-      grainLengthMm: (d['grain_length_mm'] as num?)?.toDouble(),
-      grainWidthMm: (d['grain_width_mm'] as num?)?.toDouble(),
-      aspectRatio: (d['aspect_ratio'] as num?)?.toDouble(),
-      pixelsPerMm: (d['pixels_per_mm'] ?? 0).toDouble(),
-      numDetections: (d['num_detections'] ?? 0) as int,
-      skeletonImageUrl: d['skeleton_image_url'] ?? '',
-      detectionOverlayUrl: d['detection_overlay_url'] ?? '',
-      cropSampleUrls: List<String>.from(d['crops_sample_urls'] ?? const []),
-      processedSampleUrls: List<String>.from(d['processed_sample_urls'] ?? const []),
-      createdAt: ts?.toDate() ?? DateTime.now(),
+      id: data['id']?.toString() ?? '',
+      imageId: data['image_id']?.toString() ?? '',
+      grains: data['grains'] as int? ?? 0,
+      primaryBranch: data['primary_branch'] as int? ?? 0,
+      totalSpikelets: data['total_spikelets'] as int? ?? 0,
+      filledRatio: _toDouble(data['filled_ratio']),
+      confidence: _toDouble(data['confidence']),
+      modelVersion: data['model_version'] as String? ?? 'unknown',
+      processedAt: _parseDate(data['processed_at']),
+      boundingImageUrl: data['bounding_image_url'] as String? ??
+          data['bounding_image_path'] as String?,
+      localBoundingImagePath: data['local_bounding_image_path'] as String?,
+      isSynced: data['is_synced'] as bool? ?? true,
     );
   }
 
-  Map<String, dynamic> toFirestoreForCreate() {
+  factory AnalysisResult.fromLocalMap(Map<String, dynamic> data) {
+    return AnalysisResult.fromMap(data);
+  }
+
+  Map<String, dynamic> toInsertMap() {
     return {
-      'image_name': imageName,
-      'panicle_length_mm': panicleLengthMm,
-      'grain_length_mm': grainLengthMm,
-      'grain_width_mm': grainWidthMm,
-      'aspect_ratio': aspectRatio,
-      'pixels_per_mm': pixelsPerMm,
-      'num_detections': numDetections,
-      'skeleton_image_url': skeletonImageUrl,
-      'detection_overlay_url': detectionOverlayUrl,
-      'crops_sample_urls': cropSampleUrls,
-      'processed_sample_urls': processedSampleUrls,
-      'createdAt': FieldValue.serverTimestamp(),
+      'image_id': imageId,
+      'grains': grains,
+      'primary_branch': primaryBranch,
+      'total_spikelets': totalSpikelets,
+      'filled_ratio': filledRatio,
+      'confidence': confidence,
+      'model_version': modelVersion,
+      'processed_at': processedAt.toIso8601String(),
     };
+  }
+
+  Map<String, dynamic> toLocalMap({
+    required String projectId,
+    required String hillId,
+  }) {
+    return {
+      'id': id,
+      'project_id': projectId,
+      'hill_id': hillId,
+      'image_id': imageId,
+      'grains': grains,
+      'primary_branch': primaryBranch,
+      'total_spikelets': totalSpikelets,
+      'filled_ratio': filledRatio,
+      'confidence': confidence,
+      'model_version': modelVersion,
+      'processed_at': processedAt.toIso8601String(),
+      'bounding_image_url': boundingImageUrl,
+      'local_bounding_image_path': localBoundingImagePath,
+      'is_synced': isSynced,
+    };
+  }
+
+  AnalysisResult copyWith({
+    String? id,
+    String? imageId,
+    int? grains,
+    int? primaryBranch,
+    int? totalSpikelets,
+    double? filledRatio,
+    double? confidence,
+    String? modelVersion,
+    DateTime? processedAt,
+    String? boundingImageUrl,
+    String? localBoundingImagePath,
+    bool? isSynced,
+  }) {
+    return AnalysisResult(
+      id: id ?? this.id,
+      imageId: imageId ?? this.imageId,
+      grains: grains ?? this.grains,
+      primaryBranch: primaryBranch ?? this.primaryBranch,
+      totalSpikelets: totalSpikelets ?? this.totalSpikelets,
+      filledRatio: filledRatio ?? this.filledRatio,
+      confidence: confidence ?? this.confidence,
+      modelVersion: modelVersion ?? this.modelVersion,
+      processedAt: processedAt ?? this.processedAt,
+      boundingImageUrl: boundingImageUrl ?? this.boundingImageUrl,
+      localBoundingImagePath:
+          localBoundingImagePath ?? this.localBoundingImagePath,
+      isSynced: isSynced ?? this.isSynced,
+    );
   }
 }

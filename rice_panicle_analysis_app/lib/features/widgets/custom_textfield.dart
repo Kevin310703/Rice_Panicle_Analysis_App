@@ -12,6 +12,8 @@ class CustomTextfield extends StatefulWidget {
   final String? initialValue;
   final int? maxLines;
   final int? minLines;
+  final bool readOnly;
+  final VoidCallback? onTap;
 
   const CustomTextfield({
     super.key,
@@ -25,6 +27,8 @@ class CustomTextfield extends StatefulWidget {
     this.initialValue,
     this.maxLines,
     this.minLines,
+    this.readOnly = false,
+    this.onTap,
   });
 
   @override
@@ -47,6 +51,8 @@ class _CustomTextfieldState extends State<CustomTextfield> {
       onChanged: widget.onChanged,
       maxLines: widget.maxLines ?? 1, // Mặc định 1 dòng nếu không chỉ định
       minLines: widget.minLines ?? 1,
+      readOnly: widget.readOnly,
+      onTap: widget.onTap,
       decoration: InputDecoration(
         labelText: widget.label,
         labelStyle: AppTextStyle.withColor(

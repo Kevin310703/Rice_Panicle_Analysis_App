@@ -9,11 +9,24 @@ import 'package:rice_panicle_analysis_app/features/main_screen.dart';
 import 'package:rice_panicle_analysis_app/features/sign_up_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_textfield.dart';
 
-class SigninScreen extends StatelessWidget {
-  SigninScreen({super.key});
+class SigninScreen extends StatefulWidget {
+  const SigninScreen({super.key});
+  @override
+  State<SigninScreen> createState() => _SigninScreenState();
+}
+
+class _SigninScreenState extends State<SigninScreen> {
+  bool _isLoading = false;
 
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,9 +111,7 @@ class SigninScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {
-                    _handleSignIn();
-                  },
+                  onPressed: _isLoading ? null : _handleSignIn,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     padding: const EdgeInsets.symmetric(vertical: 16),
@@ -109,7 +120,7 @@ class SigninScreen extends StatelessWidget {
                     ),
                   ),
                   child: Text(
-                    'Sign In',
+                    _isLoading ? 'Signing in...' : 'Sign in',
                     style: AppTextStyle.withColor(
                       AppTextStyle.buttonMedium,
                       Colors.white,
@@ -148,7 +159,6 @@ class SigninScreen extends StatelessWidget {
     );
   }
 
-  // Sign in button onpressed handler
   void _handleSignIn() async {
     // Validate input fields
     if (_emailController.text.trim().isEmpty) {
@@ -189,7 +199,10 @@ class SigninScreen extends StatelessWidget {
 
     final AuthController authController = Get.find<AuthController>();
 
-    // Show loading indicator
+    setState(() {
+      _isLoading = true;
+    });
+
     Get.dialog(
       const Center(child: CircularProgressIndicator()),
       barrierDismissible: false,
@@ -203,6 +216,11 @@ class SigninScreen extends StatelessWidget {
 
       // Close loading dialog
       Get.back();
+
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+      });
 
       if (!result.success) {
         Get.snackbar(
@@ -223,8 +241,14 @@ class SigninScreen extends StatelessWidget {
         Get.offAll(() => const MainScreen());
       }
     } catch (e) {
-      // Close loading dialog
-      Get.back();
+      if (Get.isDialogOpen ?? false) {
+        Get.back();
+      }
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
       Get.snackbar(
         'Error',
         'An unexpected error occured. PLease try again.',

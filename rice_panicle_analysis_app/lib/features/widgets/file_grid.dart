@@ -1,10 +1,26 @@
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 class FileGrid extends StatelessWidget {
   final List<String> files;
   final String type;
 
   const FileGrid({super.key, required this.files, required this.type});
+
+  String _normalizeDriveUrl(String url) {
+    // match cả uc?export=view&id=... / uc?export=download&id=... / file/d/<id>/view...
+    final idFromQuery = RegExp(r'[?&]id=([^&]+)').firstMatch(url)?.group(1);
+    final idFromPath = RegExp(r'/d/([^/]+)').firstMatch(url)?.group(1);
+    final fileId = idFromQuery ?? idFromPath;
+    if (url.contains('drive.google.com') && fileId != null) {
+      // thumbnail trả về image/jpeg: dùng tốt cho Image.network
+      return 'https://drive.google.com/thumbnail?id=$fileId&sz=w1000';
+    }
+    return url; // không phải link Drive thì giữ nguyên
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +56,7 @@ class FileGrid extends StatelessWidget {
         return GestureDetector(
           onTap: () {
             // Thêm logic khi nhấn vào (ví dụ: xem chi tiết ảnh hoặc file)
-            print('Tapped on $type: $file');
+            print(_normalizeDriveUrl(file));
           },
           child: Container(
             decoration: BoxDecoration(
@@ -48,8 +64,36 @@ class FileGrid extends StatelessWidget {
               color: isDark ? Colors.grey[800] : Colors.grey[200],
             ),
             child: type == 'image'
+                // ? (kIsWeb
+                //       ? _driveImageViaBackend(file)
+                //       : Image.network(
+                //           _normalizeDriveUrl(file),
+                //           fit: BoxFit.cover,
+                //           errorBuilder: (context, error, stackTrace) {
+                //             return Center(
+                //               child: Text(
+                //                 'Error loading image $error',
+                //                 style: TextStyle(
+                //                   color: isDark ? Colors.white : Colors.black,
+                //                 ),
+                //               ),
+                //             );
+                //           },
+                //           loadingBuilder: (context, child, loadingProgress) {
+                //             if (loadingProgress == null) return child;
+                //             return Center(
+                //               child: CircularProgressIndicator(
+                //                 value:
+                //                     loadingProgress.expectedTotalBytes != null
+                //                     ? loadingProgress.cumulativeBytesLoaded /
+                //                           loadingProgress.expectedTotalBytes!
+                //                     : null,
+                //               ),
+                //             );
+                //           },
+                //         ))
                 ? Image.network(
-                    file,
+                    _normalizeDriveUrl(file),
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Center(
@@ -86,6 +130,38 @@ class FileGrid extends StatelessWidget {
                   ),
           ),
         );
+      },
+    );
+  }
+
+  // THÊM helper: tách fileId từ URL Drive
+  String _extractDriveId(String url) {
+    final q = RegExp(r'[?&]id=([^&]+)').firstMatch(url)?.group(1);
+    final p = RegExp(r'/d/([^/]+)').firstMatch(url)?.group(1);
+    return q ?? p ?? url;
+  }
+
+  // THÊM widget: tải ảnh qua backend (tránh CORS)
+  Widget _driveImageViaBackend(String driveUrl) {
+    final id = _extractDriveId(driveUrl);
+    final uri = Uri.parse(
+      'https://vietkien-upload-image-to-google-driver-api.hf.space/image/$id',
+    );
+    return FutureBuilder<Uint8List>(
+      future: http.readBytes(
+        uri,
+        headers: {
+          'Authorization': 'Bearer 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',
+        },
+      ),
+      builder: (ctx, snap) {
+        if (snap.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snap.hasError || !snap.hasData) {
+          return const Center(child: Text('Error loading image'));
+        }
+        return Image.memory(snap.data!, fit: BoxFit.cover);
       },
     );
   }

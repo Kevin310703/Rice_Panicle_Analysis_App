@@ -6,6 +6,7 @@ class ProjectRepositories {
       Project(
         id: '123',
         projectName: 'Rice Variety A - Spring 2024',
+        genotypeName: 'Variety A',
         description: 'A project about rice in Vietnam',
         status: ProjectStatus.completed,
         createdAt: DateTime.now().subtract(const Duration(hours: 2)),
@@ -16,6 +17,7 @@ class ProjectRepositories {
       Project(
         id: '456',
         projectName: 'Hybrid Rice Study',
+        genotypeName: 'Hybrid HX-12',
         description: 'A project about rice in China',
         status: ProjectStatus.active,
         createdAt: DateTime(2024, 03, 10),
@@ -26,6 +28,7 @@ class ProjectRepositories {
       Project(
         id: '789',
         projectName: 'Drought Resistance Test',
+        genotypeName: 'DRT-5',
         description: 'A project about rice in India',
         status: ProjectStatus.cancelled,
         createdAt: DateTime(2024, 03, 01),

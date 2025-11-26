@@ -4,6 +4,7 @@ import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_textfield.dart';
+import 'package:rice_panicle_analysis_app/features/verify_email_screen.dart';
 
 class SignUpScreen extends StatelessWidget {
   SignUpScreen({super.key});
@@ -296,7 +297,7 @@ class SignUpScreen extends StatelessWidget {
       if (!result.success) {
         Get.snackbar(
           'Error',
-          result.message,
+          result.success.toString(),
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.red,
           colorText: Colors.white,
@@ -304,19 +305,20 @@ class SignUpScreen extends StatelessWidget {
       } else {
         Get.snackbar(
           'Success',
-          result.message,
+          'Vui lòng xác nhận email trước khi đăng nhập.',
           snackPosition: SnackPosition.BOTTOM,
           backgroundColor: Colors.green,
           colorText: Colors.white,
         );
-        Get.offAll(() => SigninScreen());
+        final email = _emailController.text.trim();
+        Get.offAll(() => VerifyEmailScreen(email: email));
       }
     } catch (e) {
       // Close loading dialog
       Get.back();
       Get.snackbar(
         'Error',
-        'An unexpected error occured. PLease try again.',
+        'An unexpected error occured. PLease try again. ${e.toString()}',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.red,
         colorText: Colors.white,

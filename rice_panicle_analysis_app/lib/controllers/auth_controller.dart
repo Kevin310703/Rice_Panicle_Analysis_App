@@ -1,8 +1,10 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
-import 'package:rice_panicle_analysis_app/services/firebase_auth_service.dart';
-import 'package:rice_panicle_analysis_app/services/user_firestore_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:rice_panicle_analysis_app/models/supabase_user_profile.dart';
+import 'package:rice_panicle_analysis_app/services/supabase_auth_service.dart';
+import 'package:rice_panicle_analysis_app/services/user_supabase_service.dart';
 
 class AuthController extends GetxController {
   final _storage = GetStorage();
@@ -11,23 +13,24 @@ class AuthController extends GetxController {
   final RxBool _isFirstTime = true.obs;
   final Rx<User?> _user = Rx<User?>(null);
   final RxBool _isLoading = false.obs;
-  final Rx<Map<String, dynamic>?> _userDocument = Rx<Map<String, dynamic>?>(
-    null,
-  );
+  final Rx<SupabaseUserProfile?> _profile = Rx<SupabaseUserProfile?>(null);
+  Future<void>? _profileReadyFuture = Future<void>.value();
 
   bool get isLoggedIn => _isLoggedIn.value;
   bool get isFirstTime => _isFirstTime.value;
   User? get user => _user.value;
   bool get isLoading => _isLoading.value;
   String? get userEmail => _user.value?.email;
-  String? get userDisplayName => _user.value?.displayName;
-  Map<String, dynamic>? get userDocument => _userDocument.value;
-  String? get userName =>
-      _userDocument.value?['name'] ?? _user.value?.displayName;
-  String? get userPhone => _userDocument.value?['phoneNumber'];
-  String? get userAddress => _userDocument.value?['phoneNumber'];
-  Map<String, dynamic> get userPreferences =>
-      _userDocument.value?['preferences'];
+  String? get userDisplayName =>
+      _profile.value?.fullName ?? _user.value?.userMetadata?['full_name'];
+  SupabaseUserProfile? get userProfile => _profile.value;
+  String? get userName => userDisplayName ?? userEmail;
+  String? get userPhone => _profile.value?.phoneNumber;
+  String? get userAddress => _profile.value?.address;
+  String? get userProfileImageUrl => _profile.value?.imageProfileUrl;
+  Future<void> get profileReady => _profileReadyFuture ?? Future.value();
+  Rx<User?> get userChanges => _user;
+  Rx<SupabaseUserProfile?> get profileChanges => _profile;
 
   @override
   void onInit() {
@@ -37,38 +40,50 @@ class AuthController extends GetxController {
   }
 
   void _loadInitialState() {
+    _isFirstTime.value = _storage.read('isFirstTime') ?? true;
     _isLoggedIn.value = _storage.read('isLoggedIn') ?? false;
-    // Check Firebase auth state instead of local storage
-    // _isFirstTime.value = _storage.read('isFirstTime') ?? true;
+    _user.value = SupabaseAuthService.currentUser;
+    _isLoggedIn.value = _user.value != null;
 
-    _user.value = FirebaseAuthService.currentUser;
-    _isLoggedIn.value = FirebaseAuthService.isSignedIn;
-
-    // Load user document if user is already signed in
-    if (_user.value != null) _loadUserDocument(_user.value!.uid);
+    if (_user.value != null) {
+      _loadUserProfile(_user.value!);
+    } else {
+      _profileReadyFuture = Future<void>.value();
+    }
   }
 
-  // Load user document from Firestore
-  Future<void> _loadUserDocument(String uid) async {
+  Future<void> _loadUserProfile(User user) {
+    final future = _performProfileLoad(user);
+    _profileReadyFuture = future;
+    return future;
+  }
+
+  Future<void> _performProfileLoad(User user) async {
+    if (user.email == null) {
+      _profile.value = null;
+      return;
+    }
     try {
-      final userDoc = await FirestoreService.getUserDocument(uid);
-      _userDocument.value = userDoc;
+      final profile = await UserSupabaseService.fetchProfileByEmail(
+        user.email!,
+      );
+      _profile.value = profile;
     } catch (e) {
-      print('Error loading user document: $e');
+      _profile.value = null;
     }
   }
 
   void _listenToAuthChanges() {
-    FirebaseAuthService.authStateChanges.listen((User? user) {
-      _user.value = user;
-      _isLoggedIn.value = user != null;
+    SupabaseAuthService.authStateChanges.listen((AuthState authState) {
+      final currentUser = authState.session?.user;
+      _user.value = currentUser;
+      _isLoggedIn.value = currentUser != null;
 
-      if (user != null) {
-        // Load user document fro, Firestore
-        _loadUserDocument(user.uid);
+      if (currentUser != null) {
+        _loadUserProfile(currentUser);
       } else {
-        // Clear user document when signed out
-        _userDocument.value = null;
+        _profile.value = null;
+        _profileReadyFuture = Future<void>.value();
       }
     });
   }
@@ -78,7 +93,6 @@ class AuthController extends GetxController {
     _storage.write('isFirstTime', false);
   }
 
-  // Sign up with email and password
   Future<AuthResult> signUp({
     required String email,
     required String password,
@@ -86,17 +100,18 @@ class AuthController extends GetxController {
   }) async {
     _isLoading.value = true;
     try {
-      final result = await FirebaseAuthService.signUpWithEmailAndPassword(
+      final result = await SupabaseAuthService.signUpWithEmailAndPassword(
         email: email,
         password: password,
         name: name,
       );
 
-      // If sign-up is successful, load user document immadiately
       if (result.success && result.user != null) {
-        // Add a small delay to ensure Firestore document is fully created
-        await Future.delayed(const Duration(milliseconds: 500));
-        await _loadUserDocument(result.user!.uid);
+        await Future.delayed(const Duration(milliseconds: 300));
+        await _loadUserProfile(result.user!);
+        _storage.write('isLoggedIn', true);
+      } else {
+        _profileReadyFuture = Future<void>.value();
       }
 
       return result;
@@ -105,21 +120,22 @@ class AuthController extends GetxController {
     }
   }
 
-  // Sign in with email and password
   Future<AuthResult> signIn({
     required String email,
     required String password,
   }) async {
     _isLoading.value = true;
     try {
-      final result = await FirebaseAuthService.signInWithEmailAndPassword(
+      final result = await SupabaseAuthService.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
 
-      // If sign-in is successful, load user document immadiately
       if (result.success && result.user != null) {
-        await _loadUserDocument(result.user!.uid);
+        await _loadUserProfile(result.user!);
+        _storage.write('isLoggedIn', true);
+      } else {
+        _profileReadyFuture = Future<void>.value();
       }
 
       return result;
@@ -128,11 +144,37 @@ class AuthController extends GetxController {
     }
   }
 
-  // Send password reset email
+  Future<AuthResult> resendVerification(String email) async {
+    _isLoading.value = true;
+    try {
+      final result = await SupabaseAuthService.resendVerificationEmail(
+        email: email,
+      );
+      return result;
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
   Future<AuthResult> sendPasswordResetEmail(String email) async {
     _isLoading.value = true;
     try {
-      final result = await FirebaseAuthService.sendPasswordResetEmail(email);
+      return await SupabaseAuthService.sendPasswordResetEmail(email);
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  Future<AuthResult> changePassword({
+    required String currentPassword,
+    required String newPassword,
+  }) async {
+    _isLoading.value = true;
+    try {
+      final result = await SupabaseAuthService.changePassword(
+        currentPassword: currentPassword,
+        newPassword: newPassword,
+      );
 
       return result;
     } finally {
@@ -140,18 +182,22 @@ class AuthController extends GetxController {
     }
   }
 
-  // Sign out
   Future<AuthResult> signOut() async {
     _isLoading.value = true;
     try {
-      final result = await FirebaseAuthService.signOut();
+      final result = await SupabaseAuthService.signOut();
+      if (result.success) {
+        _profile.value = null;
+        _user.value = null;
+        _profileReadyFuture = Future<void>.value();
+        _storage.write('isLoggedIn', false);
+      }
       return result;
     } finally {
       _isLoading.value = false;
     }
   }
 
-  // Update user profile in Firestore
   Future<bool> updatedUserProfile({
     String? name,
     String? phoneNumber,
@@ -160,48 +206,30 @@ class AuthController extends GetxController {
     String? gender,
     String? address,
   }) async {
-    if (_user.value == null) return false;
+    final profile = _profile.value;
+    if (profile == null || profile.id == null) return false;
 
     _isLoading.value = true;
     try {
-      final success = await FirestoreService.updatedUserProfile(
-        uid: _user.value!.uid,
-        name: name,
+      final parsedDob = dateOfBirth != null
+          ? DateTime.tryParse(dateOfBirth)
+          : null;
+      final updated = await UserSupabaseService.updateProfile(
+        id: profile.id ?? '',
+        fullName: name,
         phoneNumber: phoneNumber,
-        dateOfBirth: dateOfBirth,
+        dateOfBirth: parsedDob,
         gender: gender,
-        profileImageUrl: profileImageUrl,
         address: address,
+        imageProfileUrl: profileImageUrl,
       );
 
-      if (success) {
-        // Reload user document to get updated data
-        await _loadUserDocument(_user.value!.uid);
+      if (updated != null) {
+        _profile.value = updated;
+        return true;
       }
 
-      return success;
-    } finally {
-      _isLoading.value = false;
-    }
-  }
-
-  // Update user preferences
-  Future<bool> updatedUserPreferences(Map<String, dynamic> preferences) async {
-    if (_user.value == null) return false;
-
-    _isLoading.value = true;
-    try {
-      final success = await FirestoreService.updateUserPreferences(
-        uid: _user.value!.uid,
-        preferences: preferences,
-      );
-
-      if (success) {
-        // Reload user document to get updated data
-        await _loadUserDocument(_user.value!.uid);
-      }
-
-      return success;
+      return false;
     } finally {
       _isLoading.value = false;
     }
