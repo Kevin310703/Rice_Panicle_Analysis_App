@@ -17,6 +17,8 @@ class ImageGridView extends StatelessWidget {
   final ProjectController projectController;
   final Map<String, AnalysisResult> analysisByImage;
   final Future<void> Function()? onImagesChanged;
+  final bool selectionMode;
+  final VoidCallback? onEnterSelectionMode;
 
   const ImageGridView({
     super.key,
@@ -28,6 +30,8 @@ class ImageGridView extends StatelessWidget {
     required this.projectController,
     required this.analysisByImage,
     this.onImagesChanged,
+    this.selectionMode = false,
+    this.onEnterSelectionMode,
   });
 
   AnalysisResult? _resultFor(ImagePanicle image) {
@@ -167,10 +171,13 @@ class ImageGridView extends StatelessWidget {
                     imageUrl: image.imagePath,
                     bottomLabel: infoLabel,
                     isSelected: isSelected,
-                    onTap: () => onImageTap(index),
+                    onTap: selectionMode
+                        ? () => projectController.toggleImageSelection(index)
+                        : () => onImageTap(index),
                     onDelete: () => _confirmDeleteImage(context, image),
                     onLongPress: () {
                       HapticFeedback.selectionClick();
+                      onEnterSelectionMode?.call();
                       projectController.toggleImageSelection(index);
                     },
                     isDark: isDark,

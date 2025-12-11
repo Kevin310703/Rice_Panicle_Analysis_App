@@ -7,6 +7,9 @@ class ProjectDetailsAppBar extends StatelessWidget {
   final VoidCallback onToggleBookmark;
   final VoidCallback onShowOptions;
   final VoidCallback onShowStatistics;
+  final bool isSelectionMode;
+  final bool hasSelection;
+  final VoidCallback onToggleSelectionMode;
 
   const ProjectDetailsAppBar({
     super.key,
@@ -15,6 +18,9 @@ class ProjectDetailsAppBar extends StatelessWidget {
     required this.onToggleBookmark,
     required this.onShowOptions,
     required this.onShowStatistics,
+    required this.isSelectionMode,
+    required this.hasSelection,
+    required this.onToggleSelectionMode,
   });
 
   @override
@@ -37,11 +43,13 @@ class ProjectDetailsAppBar extends StatelessWidget {
       ),
       actions: [
         IconButton(
-          onPressed: onToggleBookmark,
+          onPressed: onToggleSelectionMode,
           icon: _circleButton(
             child: Icon(
-              project.isBookmark ? Icons.bookmark : Icons.bookmark_border,
-              color: project.isBookmark ? Colors.amber : Colors.black87,
+              isSelectionMode ? Icons.close : Icons.check_box_outlined,
+              color: isSelectionMode
+                  ? Colors.redAccent
+                  : (hasSelection ? Colors.green : Colors.black87),
               size: 20,
             ),
           ),

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+ï»¿import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
@@ -41,9 +41,12 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   final ScrollController _regionScrollCtrl = ScrollController();
   late final PageController _pageController;
   Worker? _activeProjectWorker;
+  Worker? _selectionWorker;
 
   TabController? _tabController;
   int _currentRegion = 0;
+  bool _isSelectionMode = false;
+  bool _hasSelection = false;
 
   static const int _kMaxFileSizeMB = 10;
   static const Set<String> _kImageExt = {'jpg', 'jpeg', 'png'};
@@ -67,11 +70,21 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     });
     _projectController = Get.find<ProjectController>();
     _projectController.setActiveProject(_project);
+    _hasSelection = _projectController.selectedImages.isNotEmpty;
     _activeProjectWorker = ever<Project?>(_projectController.projectChanges, (
       updated,
     ) {
       if (!mounted || updated == null) return;
       setState(() => _project = updated);
+    });
+    _selectionWorker = ever<Set<int>>(_projectController.selectedImages, (
+      selection,
+    ) {
+      if (!mounted) return;
+      final hasSelection = selection.isNotEmpty;
+      if (_hasSelection != hasSelection) {
+        setState(() => _hasSelection = hasSelection);
+      }
     });
     _pageController = PageController(initialPage: _currentRegion);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -87,6 +100,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     _regionScrollCtrl.dispose();
     _tabController?.dispose();
     _activeProjectWorker?.dispose();
+    _selectionWorker?.dispose();
     super.dispose();
   }
 
@@ -104,6 +118,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             onToggleBookmark: _toggleBookmark,
             onShowOptions: () => _showOptionsMenu(context),
             onShowStatistics: _openStatistics,
+            isSelectionMode: _isSelectionMode,
+            hasSelection: _hasSelection,
+            onToggleSelectionMode: _toggleSelectionMode,
           ),
           SliverToBoxAdapter(
             child: Column(
@@ -117,13 +134,42 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         ],
       ),
       floatingActionButton: Obx(() {
-        final hasSelection = _projectController.selectedImages.isNotEmpty;
+        final selectedCount = _projectController.selectedImages.length;
+        final hasSelection = selectedCount > 0;
         final isAnalyzing = _projectController.isAnalyzing;
         if (!hasSelection && !isAnalyzing) {
           return const SizedBox();
         }
-        final count = _projectController.selectedImages.length;
-        return _buildAnalysisFAB(count, isAnalyzing);
+        if (_isSelectionMode && hasSelection) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FloatingActionButton.extended(
+                heroTag: 'delete_selected_fab',
+                onPressed: selectedCount == 0
+                    ? null
+                    : () => _confirmDeleteSelectedImages(selectedCount),
+                backgroundColor: Colors.red,
+                label: Text(
+                  'Delete ($selectedCount)',
+                  style: const TextStyle(color: Colors.white),
+                ),
+                icon: const Icon(Icons.delete_outline, color: Colors.white),
+              ),
+              const SizedBox(height: 12),
+              _buildAnalysisFAB(
+                selectedCount,
+                isAnalyzing,
+                heroTag: 'analyze_selected_fab',
+              ),
+            ],
+          );
+        }
+        return _buildAnalysisFAB(
+          selectedCount,
+          isAnalyzing,
+          heroTag: 'analyze_selected_fab',
+        );
       }),
       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
       bottomNavigationBar: BottomActionBar(
@@ -150,7 +196,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   Future<void> _onRegionSelected(int index) async {
     setState(() => _currentRegion = index);
-    _projectController.selectedImages.clear();
+    _clearSelection();
     _setActiveHillContext(index);
     _tabController?.animateTo(index);
     await _centerRegion(index);
@@ -184,6 +230,27 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     );
   }
 
+  void _toggleSelectionMode() {
+    if (_isSelectionMode) {
+      _clearSelection();
+    } else {
+      setState(() => _isSelectionMode = true);
+    }
+  }
+
+  void _enterSelectionMode() {
+    if (!_isSelectionMode) {
+      setState(() => _isSelectionMode = true);
+    }
+  }
+
+  void _clearSelection({bool exitMode = true}) {
+    _projectController.selectedImages.clear();
+    if (exitMode && _isSelectionMode) {
+      setState(() => _isSelectionMode = false);
+    }
+  }
+
   // ==================== REGION PAGES ====================
   Widget _buildRegionPages(bool isDark) {
     final hillCount = _hills.length;
@@ -200,7 +267,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         physics: const BouncingScrollPhysics(),
         onPageChanged: (index) {
           setState(() => _currentRegion = index);
-          _projectController.selectedImages.clear();
+          _clearSelection();
           _setActiveHillContext(index);
           _tabController?.animateTo(index);
           _centerRegion(index);
@@ -231,6 +298,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       isDark: isDark,
       projectController: _projectController,
       analysisByImage: resultMap,
+      selectionMode: _isSelectionMode,
+      onEnterSelectionMode: _enterSelectionMode,
       onImagesChanged: _refreshProject,
       onImageTap: (index) {
         Get.to(
@@ -277,7 +346,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       images: hillImages,
     );
 
-    _projectController.selectedImages.clear();
+    _clearSelection();
     for (final index in valid) {
       _projectController.selectedImages.add(index);
     }
@@ -309,7 +378,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       await _refreshProject();
       final newIndex = _hills.isEmpty ? 0 : _hills.length - 1;
       setState(() => _currentRegion = newIndex);
-      _projectController.selectedImages.clear();
+      _clearSelection();
 
       await Future.delayed(const Duration(milliseconds: 100));
 
@@ -331,17 +400,22 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   // ==================== ANALYSIS FAB ====================
-  Widget _buildAnalysisFAB(int selectedCount, bool isAnalyzing) {
+  Widget _buildAnalysisFAB(
+    int selectedCount,
+    bool isAnalyzing, {
+    String heroTag = 'analysis_fab',
+  }) {
     final processed = _projectController.analysisProcessedCount;
     final total = _projectController.analysisTotalCount;
     final progressLabel = total > 0
-        ? 'Ðang phân tích $processed/$total'
-        : 'Ðang phân tích...';
+        ? 'Dang ph?n t?ch $processed/$total'
+        : 'Dang ph?n t?ch...';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         FloatingActionButton.extended(
+          heroTag: heroTag,
           onPressed: isAnalyzing
               ? null
               : () => _projectController.startAnalysis(),
@@ -377,7 +451,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             onPressed: () => _projectController.cancelAnalysis(),
             icon: const Icon(Icons.close_rounded, color: Colors.red),
             label: const Text(
-              'H?y phân tích',
+              'H?y ph?n t?ch',
               style: TextStyle(color: Colors.red),
             ),
             style: TextButton.styleFrom(
@@ -390,6 +464,88 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             ),
           ),
       ],
+    );
+  }
+
+  Future<void> _confirmDeleteSelectedImages(int count) async {
+    final hill = _selectedHill;
+    if (hill == null || count == 0) return;
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.warning_rounded,
+                color: Colors.red,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Text('Delete $count image${count == 1 ? '' : 's'}'),
+          ],
+        ),
+        content: const Text(
+          'Selected images and their analysis results will be permanently removed. This action cannot be undone.',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    final hillImages = _imagesForHill(hill.id);
+    final targets = _projectController.selectedImages
+        .where((index) => index >= 0 && index < hillImages.length)
+        .map((index) => hillImages[index])
+        .toList();
+    if (targets.isEmpty) {
+      _clearSelection();
+      return;
+    }
+
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+    try {
+      for (final image in targets) {
+        await _projectController.deleteProjectImage(
+          projectId: _project.id,
+          image: image,
+        );
+      }
+    } finally {
+      if (Get.isDialogOpen ?? false) {
+        Get.back();
+      }
+    }
+
+    _clearSelection();
+    await _refreshProject();
+    _showSnack(
+      '${targets.length} image${targets.length == 1 ? '' : 's'} deleted.',
     );
   }
 
@@ -557,7 +713,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
         files: payloads,
       );
       if (result.success) {
-        _projectController.selectedImages.clear();
+        _clearSelection();
         await _refreshProject();
         _showSnack(
           'Successfully uploaded ${payloads.length} photo${payloads.length == 1 ? '' : 's'}.',
@@ -622,29 +778,29 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   }
 
   Future<void> _promptRenameHill(Hill hill) async {
-      final dialogResult = await CreateHillDialog.show(
-        context,
-        title: 'Rename hill',
-        description: 'Update the name or note for this hill.',
-        confirmLabel: 'Rename hill',
-        initialLabel: hill.hillLabel,
-        initialNote: hill.notes ?? '',
-      );
-      if (dialogResult == null) return;
-      final newName = dialogResult.label.trim();
-      final newNote = dialogResult.note.trim();
-      if (newName.isEmpty) {
-        _showSnack('Hill name cannot be empty.');
-        return;
-      }
-      if (newName == hill.hillLabel && newNote == (hill.notes ?? '')) return;
+    final dialogResult = await CreateHillDialog.show(
+      context,
+      title: 'Rename hill',
+      description: 'Update the name or note for this hill.',
+      confirmLabel: 'Rename hill',
+      initialLabel: hill.hillLabel,
+      initialNote: hill.notes ?? '',
+    );
+    if (dialogResult == null) return;
+    final newName = dialogResult.label.trim();
+    final newNote = dialogResult.note.trim();
+    if (newName.isEmpty) {
+      _showSnack('Hill name cannot be empty.');
+      return;
+    }
+    if (newName == hill.hillLabel && newNote == (hill.notes ?? '')) return;
 
-      final result = await _projectController.renameHill(
-        projectId: _project.id,
-        hillId: hill.id,
-        hillLabel: newName,
-        notes: newNote.isEmpty ? null : newNote,
-      );
+    final result = await _projectController.renameHill(
+      projectId: _project.id,
+      hillId: hill.id,
+      hillLabel: newName,
+      notes: newNote.isEmpty ? null : newNote,
+    );
 
     if (result.success) {
       await _refreshProject();
@@ -696,17 +852,11 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
                 borderRadius: BorderRadius.circular(10),
               ),
             ),
-            child: const Text(
-              'Delete',
-              style: TextStyle(color: Colors.white),
-            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
           TextButton(
             onPressed: () => Get.back(result: false),
-            child: Text(
-              'Cancel',
-              style: TextStyle(color: Colors.grey[600]),
-            ),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
           ),
         ],
       ),
@@ -720,7 +870,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     );
 
     if (result.success) {
-      _projectController.selectedImages.clear();
+      _clearSelection();
       await _refreshProject();
       if (_hills.isNotEmpty) {
         final nextIndex = _currentRegion.clamp(0, _hills.length - 1).toInt();

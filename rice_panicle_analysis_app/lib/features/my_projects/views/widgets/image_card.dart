@@ -37,7 +37,6 @@ class ModernImageCard extends StatelessWidget {
       color: Colors.transparent,
       borderRadius: radius,
       child: GestureDetector(
-        behavior: HitTestBehavior.translucent,
         onTap: onTap,
         onLongPress: onLongPress,
         child: AnimatedScale(
@@ -162,27 +161,6 @@ class ModernImageCard extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                if (onDelete != null)
-                  Positioned(
-                    top: 8,
-                    left: 8,
-                    child: GestureDetector(
-                      onTap: onDelete,
-                      child: Container(
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.55),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.delete_outline,
-                          size: 16,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
 
                 // Green overlay when selected
                 AnimatedOpacity(
