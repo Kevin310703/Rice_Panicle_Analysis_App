@@ -245,10 +245,10 @@ class _ProfileFormState extends State<ProfileForm> {
               onTap: () => _selectDate(context),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           buildField(
             child: DropdownButtonFormField<String>(
-              value: _genderOptions.contains(_genderController.text)
+              initialValue: _genderOptions.contains(_genderController.text)
                   ? _genderController.text
                   : null,
               items: _genderOptions
@@ -269,7 +269,7 @@ class _ProfileFormState extends State<ProfileForm> {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           if (_isLoadingAddress)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
@@ -278,7 +278,8 @@ class _ProfileFormState extends State<ProfileForm> {
           else ...[
             buildField(
               child: DropdownButtonFormField<VietnamProvince>(
-                value: _selectedProvince,
+                isExpanded: true,
+                initialValue: _selectedProvince,
                 items: _provinces
                     .map(
                       (p) => DropdownMenuItem<VietnamProvince>(
@@ -307,10 +308,11 @@ class _ProfileFormState extends State<ProfileForm> {
                 ),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             buildField(
               child: DropdownButtonFormField<VietnamWard>(
-                value: _selectedWard,
+                isExpanded: true,
+                initialValue: _selectedWard,
                 items: _wards
                     .map(
                       (w) => DropdownMenuItem<VietnamWard>(
@@ -332,7 +334,7 @@ class _ProfileFormState extends State<ProfileForm> {
               ),
             ),
           ],
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           buildField(
             child: CustomTextfield(
               label: 'House / Street Number',
@@ -364,6 +366,7 @@ class _ProfileFormState extends State<ProfileForm> {
               ),
             ),
           ),
+          const SizedBox(height: 32),
         ],
       ),
     );

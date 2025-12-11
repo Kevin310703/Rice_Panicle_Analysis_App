@@ -230,3 +230,18 @@ class Project {
     ),
   ];
 }
+
+extension ProjectAnalysisStats on Project {
+  int get analyzedImageCount {
+    if (aiResults.isEmpty) {
+      return analyses.length;
+    }
+    final ids = <String>{};
+    for (final result in aiResults) {
+      if (result.imageId.isNotEmpty) {
+        ids.add(result.imageId);
+      }
+    }
+    return ids.length;
+  }
+}

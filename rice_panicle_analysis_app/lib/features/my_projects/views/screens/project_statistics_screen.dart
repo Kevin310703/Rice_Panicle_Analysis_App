@@ -61,6 +61,22 @@ class ProjectStatisticsScreen extends StatelessWidget {
               child: _buildDetailTable(context, isDark, stats.regionDetails),
             ),
 
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: FilledButton.icon(
+                  onPressed: stats.regionDetails.isEmpty
+                      ? null
+                      : () => _showExportDialog(context, stats.regionDetails),
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Download result'),
+                ),
+              ),
+            ),
+
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
           ],
         ),
@@ -537,17 +553,6 @@ class ProjectStatisticsScreen extends StatelessWidget {
           rows.isEmpty
               ? const _EmptyDataMessage(message: 'No detailed data available.')
               : _EnhancedRegionDataTable(isDark: isDark, rows: rows),
-          const SizedBox(height: 16),
-          Align(
-            alignment: Alignment.centerRight,
-            child: FilledButton.icon(
-              onPressed: rows.isEmpty
-                  ? null
-                  : () => _showExportDialog(context, rows),
-              icon: const Icon(Icons.download_rounded),
-              label: const Text('Download result'),
-            ),
-          ),
         ],
       ),
     );
@@ -627,10 +632,7 @@ class ProjectStatisticsScreen extends StatelessWidget {
                         ? null
                         : () {
                             Navigator.pop(context);
-                            _exportSelectedResults(
-                              selected.toList(),
-                              rows,
-                            );
+                            _exportSelectedResults(selected.toList(), rows);
                           },
                     icon: const Icon(Icons.download),
                     label: const Text('Download'),
@@ -676,11 +678,13 @@ class ProjectStatisticsScreen extends StatelessWidget {
     final permission = await _ensureExportPermissions();
     if (!permission.granted) {
       final message = permission.permanentlyDenied
-          ? 'Bạn đã từ chối quyền lưu trữ/ảnh. Vui lòng mở phần Cài đặt và cấp lại quyền để tải kết quả.'
-          : 'Ứng dụng cần quyền lưu tệp và ảnh để lưu kết quả. Vui lòng chấp nhận yêu cầu quyền.';
+          ? 'You have denied storage access. Please go to Settings and enable it to save results.'
+          : 'This app needs storage access to save results. Please grant the permission.';
       Get.snackbar(
-        'Cần quyền truy cập',
+        'Permission Required',
         message,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
       );
       if (permission.permanentlyDenied) {
@@ -702,6 +706,8 @@ class ProjectStatisticsScreen extends StatelessWidget {
       Get.snackbar(
         'Download complete',
         'Files saved to ${result.directoryPath}',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
       );
     } catch (e) {
@@ -709,13 +715,15 @@ class ProjectStatisticsScreen extends StatelessWidget {
       Get.snackbar(
         'Download failed',
         'Unable to export results. ${e.toString()}',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
       );
     }
   }
 
   Future<({bool granted, bool permanentlyDenied})>
-      _ensureExportPermissions() async {
+  _ensureExportPermissions() async {
     if (kIsWeb) {
       return (granted: true, permanentlyDenied: false);
     }
@@ -723,9 +731,9 @@ class ProjectStatisticsScreen extends StatelessWidget {
       final storage = await Permission.storage.request();
       final photos = await Permission.photos.request();
       final manage = await Permission.manageExternalStorage.request();
-      final granted =
-          storage.isGranted || photos.isGranted || manage.isGranted;
-      final permanentlyDenied = storage.isPermanentlyDenied ||
+      final granted = storage.isGranted || photos.isGranted || manage.isGranted;
+      final permanentlyDenied =
+          storage.isPermanentlyDenied ||
           photos.isPermanentlyDenied ||
           manage.isPermanentlyDenied;
       return (granted: granted, permanentlyDenied: permanentlyDenied);
@@ -737,7 +745,7 @@ class ProjectStatisticsScreen extends StatelessWidget {
       final photos = await Permission.photos.request();
       return (
         granted: photos.isGranted,
-        permanentlyDenied: photos.isPermanentlyDenied
+        permanentlyDenied: photos.isPermanentlyDenied,
       );
     }
     return (granted: true, permanentlyDenied: false);
@@ -1139,8 +1147,9 @@ class _StatisticsData {
           numImages: imgs.length,
           analyzed: analyzedImages.length,
           totalSeeds: seeds,
-          avgPerPanicle:
-              analyzedImages.isEmpty ? 0 : seeds / analyzedImages.length,
+          avgPerPanicle: analyzedImages.isEmpty
+              ? 0
+              : seeds / analyzedImages.length,
         ),
       );
       totalSeeds += seeds;
@@ -1164,11 +1173,15 @@ class _StatisticsData {
       });
     }
 
-    final avgSeeds = totalRegions == 0 ? 0 : (totalSeeds / totalRegions).round();
-    final double avgGrainsPerPanicle =
-        totalAnalyzedPanicles == 0 ? 0 : totalSeeds / totalAnalyzedPanicles;
-    final double avgPaniclesPerHill =
-        totalRegions == 0 ? 0 : totalPanicles / totalRegions;
+    final avgSeeds = totalRegions == 0
+        ? 0
+        : (totalSeeds / totalRegions).round();
+    final double avgGrainsPerPanicle = totalAnalyzedPanicles == 0
+        ? 0
+        : totalSeeds / totalAnalyzedPanicles;
+    final double avgPaniclesPerHill = totalRegions == 0
+        ? 0
+        : totalPanicles / totalRegions;
 
     return _StatisticsData(
       totalSeeds: totalSeeds,
@@ -1222,7 +1235,9 @@ class _RegionDataTable extends StatelessWidget {
                 DataCell(Text("${r.numImages}", style: textStyle)),
                 DataCell(Text("${r.analyzed}", style: textStyle)),
                 DataCell(Text("${r.totalSeeds}", style: textStyle)),
-                DataCell(Text(_formatMetric(r.avgPerPanicle), style: textStyle)),
+                DataCell(
+                  Text(_formatMetric(r.avgPerPanicle), style: textStyle),
+                ),
               ],
             );
           }).toList(),
@@ -1268,4 +1283,3 @@ String _formatMetric(num value) {
   }
   return doubleVal.toStringAsFixed(1);
 }
-

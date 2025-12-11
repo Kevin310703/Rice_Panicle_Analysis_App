@@ -38,7 +38,7 @@ class VietnamAddressService {
 
   static Future<List<VietnamProvince>> fetchProvinces() async {
     if (_cachedProvinces != null) return _cachedProvinces!;
-    final raw = await rootBundle.loadString('/jsons/vn_provinces.json');
+    final raw = await rootBundle.loadString('assets/jsons/vn_provinces.json');
     final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
     final List<dynamic> provinces = data['provinces'] as List<dynamic>? ?? [];
     _cachedProvinces = provinces
@@ -54,7 +54,7 @@ class VietnamAddressService {
   }
 
   static Future<Map<String, List<VietnamWard>>> _loadAllWards() async {
-    final raw = await rootBundle.loadString('/jsons/vn_wards.json');
+    final raw = await rootBundle.loadString('assets/jsons/vn_wards.json');
     final Map<String, dynamic> data = jsonDecode(raw) as Map<String, dynamic>;
     final List<dynamic> wards = data['wards'] as List<dynamic>? ?? [];
 

@@ -42,7 +42,7 @@ class ProjectDetailsStats extends StatelessWidget {
           Expanded(
             child: _StatItem(
               icon: Icons.analytics_rounded,
-              value: '${project.analyses.length}',
+              value: '${project.analyzedImageCount}',
               label: 'Analyses',
               color: const Color(0xFF2196F3),
             ),

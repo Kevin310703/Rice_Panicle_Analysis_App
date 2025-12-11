@@ -47,7 +47,7 @@ dependencies:
   flutter_dotenv: ^6.0.0
   postgrest: ^2.5.0
   image: ^4.5.4
-  image_gallery_saver: ^2.0.3
+  image_gallery_saver_plus: ^4.0.1
   ultralytics_yolo:
     path: temp_ultra
   flutter_launcher_icons: ^0.14.4

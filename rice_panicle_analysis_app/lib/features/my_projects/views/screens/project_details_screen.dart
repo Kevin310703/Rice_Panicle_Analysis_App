@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
@@ -335,8 +335,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     final processed = _projectController.analysisProcessedCount;
     final total = _projectController.analysisTotalCount;
     final progressLabel = total > 0
-        ? 'Đang phân tích $processed/$total'
-        : 'Đang phân tích...';
+        ? '�ang ph�n t�ch $processed/$total'
+        : '�ang ph�n t�ch...';
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -377,7 +377,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             onPressed: () => _projectController.cancelAnalysis(),
             icon: const Icon(Icons.close_rounded, color: Colors.red),
             label: const Text(
-              'Hủy phân tích',
+              'H?y ph�n t�ch',
               style: TextStyle(color: Colors.red),
             ),
             style: TextButton.styleFrom(
@@ -798,7 +798,7 @@ ${_project.description}
 View project: $projectLink
 Status: ${_project.statusString}
 Photos: ${_project.images.length}
-Analyses: ${_project.analyses.length}
+Analyses: ${_project.analyzedImageCount}
 ''';
 
     try {

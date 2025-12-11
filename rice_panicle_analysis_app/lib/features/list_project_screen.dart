@@ -494,7 +494,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                   _buildInfoChip(
                     context,
                     Icons.analytics_outlined,
-                    '${project.analyses.length} analyses',
+                    '${project.analyzedImageCount} analyses',
                     Colors.green,
                     isDark,
                   ),
@@ -561,39 +561,34 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            project.projectName,
-                            style: AppTextStyle.withColor(
-                              AppTextStyle.bodyMedium,
-                              Theme.of(context).textTheme.bodyLarge!.color!,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
+                    Text(
+                      project.projectName,
+                      style: AppTextStyle.withColor(
+                        AppTextStyle.bodyMedium,
+                        Theme.of(context).textTheme.bodyLarge!.color!,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _getStatusColor(project.status).withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        '${project.statusString[0].toUpperCase()}${project.statusString.substring(1)}',
-                        style: AppTextStyle.withColor(
-                          AppTextStyle.bodySmall,
-                          _getStatusColor(project.status),
-                        ),
-                      ),
-                    ),
+
+                    // const SizedBox(height: 8),
+                    // Container(
+                    //   padding: const EdgeInsets.symmetric(
+                    //     horizontal: 8,
+                    //     vertical: 4,
+                    //   ),
+                    //   decoration: BoxDecoration(
+                    //     color: _getStatusColor(project.status).withOpacity(0.1),
+                    //     borderRadius: BorderRadius.circular(8),
+                    //   ),
+                    //   child: Text(
+                    //     '${project.statusString[0].toUpperCase()}${project.statusString.substring(1)}',
+                    //     style: AppTextStyle.withColor(
+                    //       AppTextStyle.bodySmall,
+                    //       _getStatusColor(project.status),
+                    //     ),
+                    //   ),
+                    // ),
                     const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -628,7 +623,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                             ),
                             const SizedBox(width: 4),
                             Text(
-                              '${project.analyses.length}',
+                              '${project.analyzedImageCount}',
                               style: AppTextStyle.withColor(
                                 AppTextStyle.bodySmall,
                                 isDark ? Colors.grey[400]! : Colors.grey[600]!,

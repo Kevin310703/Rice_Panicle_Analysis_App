@@ -120,7 +120,7 @@ class ProjectCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        '${project.analyses.length} analyses',
+                        '${project.analyzedImageCount} analyses',
                         style: AppTextStyle.withColor(
                           AppTextStyle.bodySmall,
                           isDark ? Colors.grey[400]! : Colors.grey[600]!,

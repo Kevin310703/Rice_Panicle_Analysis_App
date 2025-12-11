@@ -36,10 +36,8 @@ class ModernImageCard extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       borderRadius: radius,
-      child: InkWell(
-        borderRadius: radius,
-        splashColor: const Color(0xFF4CAF50).withOpacity(0.20),
-        highlightColor: Colors.white.withOpacity(0.06),
+      child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
         onTap: onTap,
         onLongPress: onLongPress,
         child: AnimatedScale(

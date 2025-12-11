@@ -13,7 +13,7 @@ import 'package:ultralytics_yolo/yolo.dart';
 
 class PanicleModelConfig {
   const PanicleModelConfig({
-    this.modelAssetPath = 'assets/models/base_float16.tflite',
+    this.modelAssetPath = 'assets/models/ghost_simam_float16.tflite',
     this.labelsAssetPath = 'assets/models/labels.txt',
     this.inputWidth = 1600,
     this.inputHeight = 1600,
@@ -445,40 +445,15 @@ class PanicleAiService {
   }
 
   Future<Uint8List> _optimizeImageForInference(Uint8List rawBytes) async {
-    final decoded = img.decodeImage(rawBytes);
-    if (decoded == null) return rawBytes;
-
-    final maxDim = math.max(decoded.width, decoded.height);
-    final needsResize = maxDim > _transportMaxDimension;
-    final needsCompress = rawBytes.lengthInBytes > _transportMaxBytes;
-    if (!needsResize && !needsCompress) {
-      return rawBytes;
-    }
-
-    img.Image working = decoded;
-    if (needsResize) {
-      final scale = _transportMaxDimension / maxDim;
-      final targetWidth = (decoded.width * scale).round().clamp(
-        1,
-        decoded.width,
-      );
-      final targetHeight = (decoded.height * scale).round().clamp(
-        1,
-        decoded.height,
-      );
-      working = img.copyResize(
-        decoded,
-        width: targetWidth,
-        height: targetHeight,
-        interpolation: img.Interpolation.linear,
-      );
-    }
-
-    final encoded = img.encodeJpg(working, quality: _transportJpegQuality);
-    final optimized = Uint8List.fromList(encoded);
-    return optimized.lengthInBytes < rawBytes.lengthInBytes
-        ? optimized
-        : rawBytes;
+    return compute(
+      _optimizeImageInIsolate,
+      _OptimizeImageParams(
+        rawBytes,
+        _transportMaxDimension,
+        _transportMaxBytes,
+        _transportJpegQuality,
+      ),
+    );
   }
 
   // List<PanicleDetection> _applyNonMaxSuppression(
@@ -528,4 +503,56 @@ class PanicleAiService {
     }
     return 'class_$classIndex';
   }
+}
+
+class _OptimizeImageParams {
+  const _OptimizeImageParams(
+    this.bytes,
+    this.maxDimension,
+    this.maxBytes,
+    this.jpegQuality,
+  );
+
+  final Uint8List bytes;
+  final int maxDimension;
+  final int maxBytes;
+  final int jpegQuality;
+}
+
+Uint8List _optimizeImageInIsolate(_OptimizeImageParams params) {
+  final rawBytes = params.bytes;
+  final decoded = img.decodeImage(rawBytes);
+  if (decoded == null) return rawBytes;
+
+  final maxDim = math.max(decoded.width, decoded.height);
+  final needsResize = maxDim > params.maxDimension;
+  final needsCompress = rawBytes.lengthInBytes > params.maxBytes;
+  if (!needsResize && !needsCompress) {
+    return rawBytes;
+  }
+
+  img.Image working = decoded;
+  if (needsResize) {
+    final scale = params.maxDimension / maxDim;
+    final targetWidth = (decoded.width * scale).round().clamp(
+      1,
+      decoded.width,
+    );
+    final targetHeight = (decoded.height * scale).round().clamp(
+      1,
+      decoded.height,
+    );
+    working = img.copyResize(
+      decoded,
+      width: targetWidth,
+      height: targetHeight,
+      interpolation: img.Interpolation.linear,
+    );
+  }
+
+  final encoded = img.encodeJpg(working, quality: params.jpegQuality);
+  final optimized = Uint8List.fromList(encoded);
+  return optimized.lengthInBytes < rawBytes.lengthInBytes
+      ? optimized
+      : rawBytes;
 }

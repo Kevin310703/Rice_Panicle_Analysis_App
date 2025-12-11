@@ -56,7 +56,7 @@ class InfoProjectBottomSheet {
             _buildInfoItem(
               context,
               'Analyses Count',
-              '${project.analyses.length} analyses',
+              '${project.analyzedImageCount} analyses',
             ),
           ],
         ),

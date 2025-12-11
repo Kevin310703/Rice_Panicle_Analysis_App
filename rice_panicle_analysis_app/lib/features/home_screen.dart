@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
@@ -20,9 +22,19 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  Timer? _relativeTimeTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _relativeTimeTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
 
   @override
   void dispose() {
+    _relativeTimeTimer?.cancel();
     _searchController.dispose();
     super.dispose();
   }
@@ -89,7 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildSliverAppBar(BuildContext context, bool isDark) {
     return SliverAppBar(
-      expandedHeight: 70,
+      expandedHeight: 60,
       floating: false,
       pinned: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -324,7 +336,10 @@ class _HomeScreenState extends State<HomeScreen> {
         final recentProjects = projects.take(5).toList();
 
         if (recentProjects.isEmpty) {
-          return SliverFillRemaining(child: _buildEmptyState(context, isDark));
+          final emptyWidget = _searchQuery.trim().isNotEmpty
+              ? _buildSearchEmptyState(context, isDark)
+              : _buildEmptyState(context, isDark);
+          return SliverFillRemaining(child: emptyWidget);
         }
 
         return SliverList(
@@ -550,6 +565,30 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildSearchEmptyState(BuildContext context, bool isDark) {
+    final query = _searchQuery.trim();
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              query.isEmpty
+                  ? 'No matching projects'
+                  : 'No results for "$query"',
+              style: AppTextStyle.withColor(
+                AppTextStyle.h2,
+                Theme.of(context).textTheme.bodyLarge!.color!,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildErrorState(
     BuildContext context,
     ProjectController controller,
@@ -613,12 +652,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _formatDate(DateTime? date) {
     if (date == null) return 'N/A';
-    final now = DateTime.now();
-    final difference = now.difference(date);
+
+    // Normalize to UTC to avoid negative differences with Supabase timestamps.
+    final createdUtc = date.toUtc();
+    final nowUtc = DateTime.now().toUtc();
+    Duration difference = nowUtc.difference(createdUtc);
+    if (difference.isNegative) difference = Duration.zero;
 
     if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
+      if (difference.inMinutes < 1) {
         return 'Just now';
+      } else if (difference.inHours == 0) {
+        return '${difference.inMinutes}m ago';
       }
       return '${difference.inHours}h ago';
     } else if (difference.inDays == 1) {
@@ -626,7 +671,8 @@ class _HomeScreenState extends State<HomeScreen> {
     } else if (difference.inDays < 7) {
       return '${difference.inDays}d ago';
     } else {
-      return '${date.day}/${date.month}/${date.year}';
+      final localDate = createdUtc.toLocal();
+      return '${localDate.day}/${localDate.month}/${localDate.year}';
     }
   }
 

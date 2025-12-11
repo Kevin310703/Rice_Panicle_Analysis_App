@@ -214,7 +214,7 @@ class BookmarkScreen extends StatelessWidget {
                       color: isDark ? Colors.grey[400]! : Colors.grey[600]!,
                     ),
                     Text(
-                      '${project.analyses.length} analyses',
+                      '${project.analyzedImageCount} analyses',
                       style: AppTextStyle.withColor(
                         AppTextStyle.bodySmall,
                         isDark ? Colors.grey[400]! : Colors.grey[600]!,

@@ -46,10 +46,7 @@ class _ProjectFormState extends State<ProjectForm> {
         _harvestDateController.text = _formatDate(_harvestDate!);
       }
     } else {
-      _projectNameController.text = _projectController.projectName ?? '';
-      _descriptionController.text = _projectController.projectDescription ?? '';
-      _genotypeController.text = '';
-      _notesController.text = '';
+      _clearForm();
     }
   }
 
@@ -178,13 +175,16 @@ class _ProjectFormState extends State<ProjectForm> {
 
         if (result.success) {
           _clearForm();
-          Get.snackbar(
-            'Success',
-            'Project created successfully!',
-            backgroundColor: Colors.green,
-            colorText: Colors.white,
-          );
           Get.back(result: true);
+          Future.delayed(Duration(milliseconds: 100), () {
+            Get.snackbar(
+              'Success',
+              'Project created successfully!',
+              snackPosition: SnackPosition.BOTTOM,
+              backgroundColor: Colors.green,
+              colorText: Colors.white,
+            );
+          });
         } else {
           _showError(result.message);
         }

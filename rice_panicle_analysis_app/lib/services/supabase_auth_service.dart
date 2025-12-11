@@ -227,7 +227,7 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: false,
-        message: 'Bạn chưa đăng nhập.',
+        message: 'You are not logged in.',
       );
     }
 
@@ -251,7 +251,7 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: true,
-        message: 'Đổi mật khẩu thành công',
+        message: 'Password changed successfully',
       );
     } on AuthException catch (e) {
       return AuthResult(false, success: false, message: e.message);
@@ -259,7 +259,7 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: false,
-        message: 'Không thể đổi mật khẩu. Vui lòng thử lại.',
+        message: 'Unable to change password. Please try again.',
       );
     }
   }
@@ -270,7 +270,7 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: true,
-        message: 'Đăng xuất thành công',
+        message: 'Signed out successfully.',
       );
     } on AuthException catch (e) {
       return AuthResult(false, success: false, message: e.message);
@@ -278,7 +278,7 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: false,
-        message: 'Không thể đăng xuất. Vui lòng thử lại.',
+        message: 'Unable to sign out. Please try again.',
       );
     }
   }
@@ -291,7 +291,7 @@ class SupabaseAuthService {
     if (user == null) {
       return {
         'success': false,
-        'message': 'Bạn cần đăng nhập để tải ảnh.',
+        'message': 'You must be logged in to upload an image.',
       };
     }
 
@@ -320,14 +320,14 @@ class SupabaseAuthService {
       return {
         'success': true,
         'imageUrl': publicUrl,
-        'message': 'Tải ảnh thành công',
+        'message': 'Image uploaded successfully.',
       };
     } on StorageException catch (e) {
       return {'success': false, 'message': e.message};
     } catch (e) {
       return {
         'success': false,
-        'message': 'Không thể tải ảnh. Vui lòng thử lại.',
+        'message': 'Unable to upload image. Please try again.',
       };
     }
   }

@@ -20,7 +20,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: ".env");
   usePathUrlStrategy();
-  
+
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
@@ -28,17 +28,17 @@ void main() async {
       authFlowType: AuthFlowType.pkce,
     ),
   );
-  
+
   await GetStorage.init();
   Get.put(ThemeController());
   Get.put(AuthController());
   Get.put(NavigationController());
   Get.put(ProjectController());
 
-  // Warm up ONNX runtime so the first analysis is faster.
+  // Warm up TFLite runtime so the first analysis is faster.
   final panicleService = PanicleAiService.instance;
   unawaited(panicleService.warmUp());
-  
+
   runApp(const MyApp());
 }
 
@@ -61,38 +61,41 @@ class _MyAppState extends State<MyApp> {
     Supabase.instance.client.auth.onAuthStateChange.listen((data) {
       final event = data.event;
       final session = data.session;
-      
+
       debugPrint('🔵 Auth event: $event');
-      
+
       if (event == AuthChangeEvent.signedIn) {
         debugPrint('✅ User signed in: ${session?.user.email}');
         // Note: Navigation will be handled by your screens
-      } 
-      else if (event == AuthChangeEvent.signedOut) {
+      } else if (event == AuthChangeEvent.signedOut) {
         debugPrint('👋 User signed out');
         // Note: Navigation will be handled by your screens
-      }
-      else if (event == AuthChangeEvent.passwordRecovery) {
+      } else if (event == AuthChangeEvent.passwordRecovery) {
         debugPrint('Password recovery event received');
         Get.offAll(() => const ResetPasswordScreen());
-      }
-      else if (event == AuthChangeEvent.userUpdated) {
+      } else if (event == AuthChangeEvent.userUpdated) {
         debugPrint('🔄 User updated');
-        
-        // Check if email was just verified
-        if (session?.user.emailConfirmedAt != null) {
+        final user = session?.user;
+        final emailConfirmed = user?.emailConfirmedAt;
+        final metadata = user?.userMetadata ?? {};
+        final bool isEmailVerification =
+            (metadata['invited'] == true) ||
+            (metadata['emailVerified'] == true) ||
+            (metadata['email_confirmed'] == true);
+
+        if (emailConfirmed != null && isEmailVerification) {
           debugPrint('✅ Email verified!');
-          
           Get.snackbar(
             'Success',
             'Email verified successfully! You can now sign in.',
             backgroundColor: Colors.green,
             colorText: Colors.white,
-            snackPosition: SnackPosition.TOP,
+            snackPosition: SnackPosition.BOTTOM,
           );
+        } else {
+          debugPrint('User updated due to another action; snackbar skipped.');
         }
-      }
-      else if (event == AuthChangeEvent.tokenRefreshed) {
+      } else if (event == AuthChangeEvent.tokenRefreshed) {
         debugPrint('🔄 Token refreshed');
       }
     });
@@ -101,7 +104,7 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) {
     final themeController = Get.find<ThemeController>();
-    
+
     return GetMaterialApp(
       title: 'GrainCount AI',
       theme: AppThemes.light,

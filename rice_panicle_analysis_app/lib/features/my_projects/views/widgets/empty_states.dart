@@ -33,7 +33,7 @@ class EmptyHillState extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text(
-            'No hills yet',
+            'No hills',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w600,
@@ -45,17 +45,6 @@ class EmptyHillState extends StatelessWidget {
             'Create a new hill to start uploading photos and analyzing.',
             textAlign: TextAlign.center,
             style: TextStyle(color: Colors.grey[500], fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onCreateHill,
-            icon: const Icon(Icons.add_circle_outline),
-            label: const Text('Create hill'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4CAF50),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            ),
           ),
         ],
       ),

@@ -55,7 +55,7 @@ class AccountScreen extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? Colors.grey[850] : Colors.grey[100],
+        color: isDark ? Colors.grey[850] : Colors.white,
         borderRadius: const BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Column(
@@ -72,15 +72,27 @@ class AccountScreen extends StatelessWidget {
               );
             }
 
-            return CircleAvatar(
-              radius: 50,
-              backgroundColor: Theme.of(context).cardColor,
-              child: ClipOval(
-                child: Image(
-                  image: avatarProvider,
-                  fit: BoxFit.contain,
-                  width: 100,
-                  height: 100,
+            return Container(
+              width: 100,
+              height: 100,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Theme.of(context).primaryColor,
+                  width: 2,
+                ),
+              ),
+              child: CircleAvatar(
+                radius: 48,
+                backgroundColor: Theme.of(context).cardColor,
+                child: ClipOval(
+                  child: Image(
+                    image: avatarProvider,
+                    fit: BoxFit.contain,
+                    width: 100,
+                    height: 100,
+                  ),
                 ),
               ),
             );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
+import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_textfield.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
 
@@ -432,6 +433,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
 
   void _showSuccessDialog(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final authController = Get.find<AuthController>();
 
     Get.dialog(
       AlertDialog(
@@ -464,7 +466,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Your password has been updated successfully. Please use your new password for future logins.',
+              'For security reasons, please sign out and log in again with your new password.',
               style: AppTextStyle.withColor(
                 AppTextStyle.bodyMedium,
                 isDark ? Colors.grey[400]! : Colors.grey[600]!,
@@ -475,9 +477,25 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () {
-                  Get.back(); // Close dialog
-                  Get.back(); // Go back to previous screen
+                onPressed: () async {
+                  Get.back(); // close dialog
+                  Get.dialog(
+                    const Center(child: CircularProgressIndicator()),
+                    barrierDismissible: false,
+                  );
+                  final result = await authController.signOut();
+                  Get.back(); // close loading
+                  if (!result.success) {
+                    Get.snackbar(
+                      'Sign out failed',
+                      result.message,
+                      snackPosition: SnackPosition.BOTTOM,
+                      backgroundColor: Colors.red,
+                      colorText: Colors.white,
+                    );
+                    return;
+                  }
+                  Get.offAll(() => const SigninScreen());
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Theme.of(context).primaryColor,
@@ -487,7 +505,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
                   ),
                 ),
                 child: Text(
-                  'Done',
+                  'Sign out & log in again',
                   style: AppTextStyle.withColor(
                     AppTextStyle.buttonMedium,
                     Colors.white,

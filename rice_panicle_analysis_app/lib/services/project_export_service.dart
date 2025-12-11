@@ -1,8 +1,7 @@
 import 'dart:io';
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -131,16 +130,15 @@ class ProjectExportService {
       if (panicle == null) continue;
       final bytes = await _loadBoundingImageBytes(result);
       if (bytes == null) continue;
-      final overlay = img.decodeImage(bytes);
-      if (overlay == null) continue;
-      _annotateOverlay(overlay, result);
+      final annotatedBytes = await _buildAnnotatedOverlay(bytes, result);
+      if (annotatedBytes == null) continue;
       final fileName =
           'hill_${panicle.hillId}_${result.imageId}.png'.replaceAll(
         RegExp(r'[\\/]+'),
         '_',
       );
       final file = File(p.join(exportDir.path, fileName));
-      await file.writeAsBytes(img.encodePng(overlay));
+      await file.writeAsBytes(annotatedBytes);
       await _saveImageToGallery(file);
       exportedPaths.add(file.path);
     }
@@ -167,12 +165,30 @@ class ProjectExportService {
     return null;
   }
 
-  void _annotateOverlay(img.Image image, AnalysisResult result) {
+  Future<Uint8List?> _buildAnnotatedOverlay(
+    Uint8List bytes,
+    AnalysisResult result,
+  ) async {
+    try {
+      return await compute<_OverlayWorkRequest, Uint8List?>(
+        _drawOverlayInIsolate,
+        _OverlayWorkRequest(
+          bytes: bytes,
+          grains: result.grains,
+          branches: result.primaryBranch,
+        ),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _annotateOverlay(img.Image image, int grains, int branches) {
     final font = img.arial24;
     final lineHeight = font.lineHeight == 0 ? 24 : font.lineHeight;
     final lines = [
-      'Seeds: ${result.grains}',
-      'Branches: ${result.primaryBranch}',
+      'Seeds: $grains',
+      'Branches: $branches',
     ];
     var y = 12;
     for (final line in lines) {
@@ -194,8 +210,11 @@ class ProjectExportService {
   }
 
   Future<void> _saveImageToGallery(File file) async {
+    if (!(Platform.isAndroid || Platform.isIOS)) {
+      return;
+    }
     try {
-      await ImageGallerySaver.saveFile(
+      await ImageGallerySaverPlus.saveFile(
         file.path,
         name: p.basenameWithoutExtension(file.path),
       );
@@ -221,4 +240,25 @@ class ProjectExportService {
     } catch (_) {}
     return await getApplicationDocumentsDirectory();
   }
+}
+
+class _OverlayWorkRequest {
+  final Uint8List bytes;
+  final int grains;
+  final int branches;
+
+  const _OverlayWorkRequest({
+    required this.bytes,
+    required this.grains,
+    required this.branches,
+  });
+}
+
+Uint8List? _drawOverlayInIsolate(_OverlayWorkRequest request) {
+  final overlay = img.decodeImage(request.bytes);
+  if (overlay == null) return null;
+  final service = ProjectExportService.instance;
+  service._annotateOverlay(overlay, request.grains, request.branches);
+  final encoded = img.encodePng(overlay);
+  return Uint8List.fromList(encoded);
 }

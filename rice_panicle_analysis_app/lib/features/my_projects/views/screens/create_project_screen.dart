@@ -20,7 +20,7 @@ class CreateProjectScreen extends StatelessWidget {
           onPressed: () => Get.back(),
         ),
         title: Text(
-          'Create New Project',
+          'Create new project',
           style: AppTextStyle.withColor(
             AppTextStyle.h3,
             isDark ? Colors.white : Colors.black,

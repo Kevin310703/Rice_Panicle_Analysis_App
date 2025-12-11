@@ -27,7 +27,6 @@ class MainScreen extends StatelessWidget {
                 // Add your main screen widgets here
                 HomeScreen(),
                 ListProjectScreen(),
-                // BookmarkScreen(),
                 AccountScreen(),
               ],
             ),

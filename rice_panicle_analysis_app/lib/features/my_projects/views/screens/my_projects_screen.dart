@@ -41,11 +41,6 @@ class MyProjectsScreen extends StatelessWidget {
                   style: TextStyle(color: Colors.grey[600], fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
-                // const SizedBox(height: 16),
-                // ElevatedButton(
-                //   onPressed: () => projectController.refreshProjects(),
-                //   child: const Text('Retry'),
-                // ),
               ],
             ),
           );
@@ -68,11 +63,6 @@ class MyProjectsScreen extends StatelessWidget {
                   'No projects availabel',
                   style: TextStyle(color: Colors.grey[600], fontSize: 16),
                 ),
-                // const SizedBox(height: 16),
-                // ElevatedButton(
-                //   onPressed: () => projectController.refreshProjects(),
-                //   child: const Text('Refresh'),
-                // ),
               ],
             ),
           );
