@@ -70,7 +70,7 @@ class ProjectSupabaseService {
     final data = await query.maybeSingle();
 
     if (data == null) return null;
-    return Project.fromSupabase(data as Map<String, dynamic>);
+    return Project.fromSupabase(data);
   }
 
   static Future<List<Project>> getProjectsByDateRange({
@@ -224,6 +224,62 @@ class ProjectSupabaseService {
     }
   }
 
+  static Future<ProjectResult> updateHill({
+    required String projectId,
+    required String hillId,
+    required String hillLabel,
+    String? notes,
+  }) async {
+    try {
+      final payload = <String, dynamic>{
+        'hill_label': hillLabel,
+        'notes': notes,
+        'updated_at': DateTime.now().toIso8601String(),
+      }..removeWhere((key, value) => value == null);
+
+      await _client
+          .from(_hillsTable)
+          .update(payload)
+          .eq('id', hillId);
+
+      final updatedProject = await getProjectById(projectId: projectId);
+      return ProjectResult(
+        success: true,
+        project: updatedProject,
+        message: 'Hill updated successfully',
+      );
+    } on PostgrestException catch (e) {
+      return ProjectResult(success: false, message: e.message);
+    } catch (e) {
+      return ProjectResult(
+        success: false,
+        message: 'Failed to update hill. Please try again.',
+      );
+    }
+  }
+
+  static Future<ProjectResult> deleteHill({
+    required String projectId,
+    required String hillId,
+  }) async {
+    try {
+      await _client.from(_hillsTable).delete().eq('id', hillId);
+      final updatedProject = await getProjectById(projectId: projectId);
+      return ProjectResult(
+        success: true,
+        project: updatedProject,
+        message: 'Hill deleted successfully',
+      );
+    } on PostgrestException catch (e) {
+      return ProjectResult(success: false, message: e.message);
+    } catch (e) {
+      return ProjectResult(
+        success: false,
+        message: 'Failed to delete hill. Please try again.',
+      );
+    }
+  }
+
   static Future<ProjectResult> uploadHillImages({
     required String projectId,
     required String hillId,
@@ -306,6 +362,34 @@ class ProjectSupabaseService {
     }
 
     return urls;
+  }
+
+  static Future<void> deleteImage({
+    required String imageId,
+    String? imagePath,
+  }) async {
+    try {
+      await _client
+          .from(_analysisResultsTable)
+          .delete()
+          .eq('image_id', imageId);
+      await _client
+          .from(_analysisLogsTable)
+          .delete()
+          .eq('analysis_type', 'bbox_image:$imageId');
+      await _client.from(_imagesTable).delete().eq('id', imageId);
+
+      final storagePath = _storagePathFromUrl(imagePath);
+      if (storagePath != null) {
+        await _client.storage
+            .from(_projectImagesBucket)
+            .remove([storagePath]);
+      }
+    } catch (e) {
+      // swallow errors, controller will surface generic message
+      // ignore: avoid_print
+      print('Failed to delete remote image: $e');
+    }
   }
 
   static Future<String?> uploadAnalysisBoundingImage({
@@ -434,4 +518,15 @@ class ProjectSupabaseService {
       )
     )
   ''';
+
+  static String? _storagePathFromUrl(String? url) {
+    if (url == null || url.isEmpty) return null;
+    final uri = Uri.tryParse(url);
+    if (uri == null) return null;
+    final index = uri.pathSegments.indexOf(_projectImagesBucket);
+    if (index == -1 || index + 1 >= uri.pathSegments.length) return null;
+    final segments = uri.pathSegments.sublist(index + 1);
+    if (segments.isEmpty) return null;
+    return segments.join('/');
+  }
 }

@@ -16,6 +16,7 @@ class ImageGridView extends StatelessWidget {
   final Function(int) onImageTap;
   final ProjectController projectController;
   final Map<String, AnalysisResult> analysisByImage;
+  final Future<void> Function()? onImagesChanged;
 
   const ImageGridView({
     super.key,
@@ -26,6 +27,7 @@ class ImageGridView extends StatelessWidget {
     required this.onImageTap,
     required this.projectController,
     required this.analysisByImage,
+    this.onImagesChanged,
   });
 
   AnalysisResult? _resultFor(ImagePanicle image) {
@@ -34,9 +36,9 @@ class ImageGridView extends StatelessWidget {
 
   String _infoLabelFor(ImagePanicle image) {
     final result = _resultFor(image);
-    if (result == null) return 'Chưa phân tích';
+    if (result == null) return 'No result';
     final grains = result.grains;
-    return 'Grain $grains';
+    return '$grains grain${grains < 2 ? '' : 's'}';
   }
 
   bool _hasAnnotatedImage(ImagePanicle image) {
@@ -166,6 +168,7 @@ class ImageGridView extends StatelessWidget {
                     bottomLabel: infoLabel,
                     isSelected: isSelected,
                     onTap: () => onImageTap(index),
+                    onDelete: () => _confirmDeleteImage(context, image),
                     onLongPress: () {
                       HapticFeedback.selectionClick();
                       projectController.toggleImageSelection(index);
@@ -179,6 +182,86 @@ class ImageGridView extends StatelessWidget {
               },
             ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteImage(
+    BuildContext context,
+    ImagePanicle image,
+  ) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.warning_rounded,
+                color: Colors.red,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete image'),
+          ],
+        ),
+        content: const Text(
+          'Are you sure you want to delete this image? '
+          'Any associated analysis results will also be removed. '
+          'This action cannot be undone.',
+          style: TextStyle(fontSize: 15),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final result = await projectController.deleteProjectImage(
+      projectId: hill.projectId,
+      image: image,
+    );
+
+    if (result.success) {
+      if (onImagesChanged != null) {
+        await onImagesChanged!.call();
+      }
+      _showSnack(context, 'Image deleted successfully.', success: true);
+    } else if (result.message.isNotEmpty) {
+      _showSnack(context, result.message, success: false);
+    }
+  }
+
+  void _showSnack(
+    BuildContext context,
+    String message, {
+    required bool success,
+  }) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: success ? Colors.green : Colors.red,
       ),
     );
   }

@@ -71,10 +71,7 @@ class ProjectDetailsStats extends StatelessWidget {
 
   int _totalGrainCount() {
     return project.aiResults.fold<int>(0, (sum, result) {
-      final spikes = result.totalSpikelets != 0
-          ? result.totalSpikelets
-          : (result.grains);
-      return sum + spikes;
+      return sum + result.grains;
     });
   }
 }

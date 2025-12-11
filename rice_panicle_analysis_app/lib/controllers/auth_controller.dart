@@ -165,6 +165,15 @@ class AuthController extends GetxController {
     }
   }
 
+  Future<AuthResult> completePasswordRecovery(String newPassword) async {
+    _isLoading.value = true;
+    try {
+      return await SupabaseAuthService.completePasswordRecovery(newPassword);
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
   Future<AuthResult> changePassword({
     required String currentPassword,
     required String newPassword,

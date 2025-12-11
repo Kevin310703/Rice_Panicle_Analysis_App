@@ -1,142 +1,4 @@
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
-// import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
-// import 'package:rice_panicle_analysis_app/features/my_projects/views/screens/create_project_screen.dart';
-// import 'package:rice_panicle_analysis_app/features/widgets/category_chips.dart';
-// import 'package:rice_panicle_analysis_app/features/widgets/filter_bottom_sheet.dart';
-// import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
-
-// import 'my_projects/views/widgets/project_card.dart';
-
-// class ListProjectScreen extends StatelessWidget {
-//   const ListProjectScreen({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     final projects = Project.projects;
-//     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text(
-//           'My Project',
-//           style: AppTextStyle.withColor(
-//             AppTextStyle.h3,
-//             isDark ? Colors.white : Colors.black,
-//           ),
-//         ),
-//         actions: [
-//           IconButton(
-//             icon: Icon(
-//               Icons.search,
-//               color: isDark ? Colors.white : Colors.black,
-//             ),
-//             onPressed: () {},
-//           ),
-
-//           IconButton(
-//             icon: Icon(
-//               Icons.filter_list,
-//               color: isDark ? Colors.white : Colors.black,
-//             ),
-//             onPressed: () => FilterBottomSheet.show(context),
-//           ),
-//         ],
-//       ),
-//       body: Column(
-//         children: [
-//           Padding(padding: EdgeInsets.only(top: 16), child: CategoryChips()),
-//           Expanded(
-//             child: GetBuilder<ProjectController>(
-//               builder: (projectController) {
-//                 if (projectController.isLoading) {
-//                   return const Center(child: CircularProgressIndicator());
-//                 }
-
-//                 if (projectController.hasError) {
-//                   return Center(
-//                     child: Column(
-//                       mainAxisAlignment: MainAxisAlignment.center,
-//                       children: [
-//                         Icon(
-//                           Icons.error_outline,
-//                           size: 64,
-//                           color: Colors.grey[400],
-//                         ),
-//                         const SizedBox(height: 16),
-//                         Text(
-//                           projectController.errorMessage,
-//                           style: TextStyle(
-//                             color: Colors.grey[600],
-//                             fontSize: 16,
-//                           ),
-//                           textAlign: TextAlign.center,
-//                         ),
-//                         const SizedBox(height: 16),
-//                         ElevatedButton(
-//                           onPressed: () => projectController.refreshProjects(),
-//                           child: const Text('Retry'),
-//                         ),
-//                       ],
-//                     ),
-//                   );
-//                 }
-
-//                 final displayProjects = projectController.getDisplayProjects();
-
-//                 if (displayProjects.isEmpty) {
-//                   return Center(
-//                     child: Column(
-//                       mainAxisAlignment: MainAxisAlignment.center,
-//                       children: [
-//                         Icon(
-//                           Icons.folder_off_outlined,
-//                           size: 64,
-//                           color: Colors.grey[400],
-//                         ),
-//                         const SizedBox(height: 16),
-//                         Text(
-//                           'No projects availabel',
-//                           style: TextStyle(
-//                             color: Colors.grey[600],
-//                             fontSize: 16,
-//                           ),
-//                         ),
-//                         const SizedBox(height: 16),
-//                         ElevatedButton(
-//                           onPressed: () => projectController.refreshProjects(),
-//                           child: const Text('Refresh'),
-//                         ),
-//                       ],
-//                     ),
-//                   );
-//                 }
-
-//                 return ListView.builder(
-//                   itemBuilder: (context, index) {
-//                     return ProjectCard(project: displayProjects[index]);
-//                   },
-//                   padding: const EdgeInsets.all(12),
-//                   itemCount: displayProjects.length,
-//                 );
-//               },
-//             ),
-//           ),
-//         ],
-//       ),
-//       floatingActionButton: FloatingActionButton(
-//         onPressed: () => Get.to(() => CreateProjectScreen()),
-//         backgroundColor: Theme.of(context).primaryColor,
-//         child: Icon(
-//           Icons.add,
-//           color: isDark ? Colors.white : Colors.black,
-//         ),
-//       ),
-//       floatingActionButtonLocation: FloatingActionButtonLocation.endFloat,
-//     );
-//   }
-// }
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
@@ -160,6 +22,9 @@ class _ListProjectScreenState extends State<ListProjectScreen>
   String _searchQuery = '';
   String _selectedFilter = 'All';
   bool _isGridView = false;
+  final List<Project> _searchResults = [];
+  bool _isSearching = false;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -171,6 +36,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
   void dispose() {
     _tabController?.dispose();
     _searchController.dispose();
+    _searchDebounce?.cancel();
     super.dispose();
   }
 
@@ -187,9 +53,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     if (_tabController == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -202,45 +66,67 @@ class _ListProjectScreenState extends State<ListProjectScreen>
               expandedHeight: 140,
               floating: true,
               pinned: true,
-              backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+              backgroundColor: Theme.of(context).primaryColor,
               elevation: 0,
-              flexibleSpace: FlexibleSpaceBar(
-                background: Container(
-                  padding: const EdgeInsets.fromLTRB(16, 56, 16, 0),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).primaryColor.withOpacity(0.1),
-                        Theme.of(context).scaffoldBackgroundColor,
-                      ],
+              flexibleSpace: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Color(0xFF4CAF50),
+                          Color(0xFF66BB6A),
+                          Color(0xFF81C784),
+                        ],
+                      ),
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      Text(
-                        'My Projects',
-                        style: AppTextStyle.withColor(
-                          AppTextStyle.h2,
-                          Theme.of(context).textTheme.bodyLarge!.color!,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      GetBuilder<ProjectController>(
-                        builder: (controller) => Text(
-                          '${controller.allProjects.length} projects',
-                          style: AppTextStyle.withColor(
-                            AppTextStyle.bodyMedium,
-                            isDark ? Colors.grey[400]! : Colors.grey[600]!,
-                          ),
-                        ),
-                      ),
-                    ],
+                  const IgnorePointer(
+                    child: CustomPaint(painter: _CirclePatternPainter()),
                   ),
-                ),
+                  FlexibleSpaceBar(
+                    background: Container(
+                      padding: const EdgeInsets.fromLTRB(16, 56, 16, 0),
+                      child: SafeArea(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            Text(
+                              'My Projects',
+                              style: AppTextStyle.withColor(
+                                AppTextStyle.h2,
+                                Colors.white,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            GetBuilder<ProjectController>(
+                              builder: (controller) {
+                                final count = controller.allProjects.length;
+                                final text = count == 1
+                                    ? 'project'
+                                    : 'projects';
+
+                                return Text(
+                                  '$count $text',
+                                  style: AppTextStyle.withColor(
+                                    AppTextStyle.h3,
+                                    isDark
+                                        ? Colors.grey[400]!
+                                        : const Color.fromARGB(255, 0, 0, 0),
+                                  ),
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
               actions: [
                 IconButton(
@@ -286,9 +172,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
             ),
 
             // Search Bar
-            SliverToBoxAdapter(
-              child: _buildSearchBar(context, isDark),
-            ),
+            SliverToBoxAdapter(child: _buildSearchBar(context, isDark)),
 
             // Tab Bar
             SliverPersistentHeader(
@@ -304,8 +188,9 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                     Tab(text: 'Cancelled'),
                   ],
                   labelColor: Theme.of(context).primaryColor,
-                  unselectedLabelColor:
-                      isDark ? Colors.grey[400] : Colors.grey[600],
+                  unselectedLabelColor: isDark
+                      ? Colors.grey[400]
+                      : Colors.grey[600],
                   indicatorColor: Theme.of(context).primaryColor,
                   indicatorWeight: 3,
                   labelStyle: AppTextStyle.bodyMedium,
@@ -359,11 +244,8 @@ class _ListProjectScreenState extends State<ListProjectScreen>
         ),
         child: TextField(
           controller: _searchController,
-          onChanged: (value) {
-            setState(() {
-              _searchQuery = value;
-            });
-          },
+          onChanged: _handleSearchChanged,
+          onSubmitted: _handleSearchChanged,
           decoration: InputDecoration(
             hintText: 'Search projects...',
             hintStyle: AppTextStyle.withColor(
@@ -382,8 +264,11 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                     ),
                     onPressed: () {
                       _searchController.clear();
+                      _searchDebounce?.cancel();
                       setState(() {
                         _searchQuery = '';
+                        _searchResults.clear();
+                        _isSearching = false;
                       });
                     },
                   )
@@ -419,24 +304,21 @@ class _ListProjectScreenState extends State<ListProjectScreen>
           return _buildErrorState(context, projectController, isDark);
         }
 
-        var projects = projectController.allProjects;
+        if (_searchQuery.trim().isNotEmpty && _isSearching) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final hasQuery = _searchQuery.trim().isNotEmpty;
+        List<Project> baseProjects = hasQuery
+            ? List<Project>.from(_searchResults)
+            : projectController.allProjects;
 
         // Filter by status
         if (status != null) {
-          projects = projects.where((p) => p.status == status).toList();
+          baseProjects = baseProjects.where((p) => p.status == status).toList();
         }
 
-        // Apply search filter
-        if (_searchQuery.isNotEmpty) {
-          projects = projects.where((project) {
-            return project.projectName
-                    .toLowerCase()
-                    .contains(_searchQuery.toLowerCase()) ||
-                project.description
-                    .toLowerCase()
-                    .contains(_searchQuery.toLowerCase());
-          }).toList();
-        }
+        final projects = baseProjects;
 
         if (projects.isEmpty) {
           return _buildEmptyState(context, status, isDark);
@@ -536,7 +418,9 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                             Icon(
                               Icons.calendar_today_outlined,
                               size: 12,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -719,7 +603,9 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                             Icon(
                               Icons.image_outlined,
                               size: 14,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -736,7 +622,9 @@ class _ListProjectScreenState extends State<ListProjectScreen>
                             Icon(
                               Icons.analytics_outlined,
                               size: 14,
-                              color: isDark ? Colors.grey[400] : Colors.grey[600],
+                              color: isDark
+                                  ? Colors.grey[400]
+                                  : Colors.grey[600],
                             ),
                             const SizedBox(width: 4),
                             Text(
@@ -780,10 +668,7 @@ class _ListProjectScreenState extends State<ListProjectScreen>
           const SizedBox(width: 4),
           Text(
             label,
-            style: AppTextStyle.withColor(
-              AppTextStyle.bodySmall,
-              color,
-            ),
+            style: AppTextStyle.withColor(AppTextStyle.bodySmall, color),
           ),
         ],
       ),
@@ -843,30 +728,6 @@ class _ListProjectScreenState extends State<ListProjectScreen>
               ),
               textAlign: TextAlign.center,
             ),
-            if (_searchQuery.isEmpty) ...[
-              const SizedBox(height: 32),
-              ElevatedButton.icon(
-                onPressed: _openCreateProject,
-                icon: const Icon(Icons.add, color: Colors.white),
-                label: Text(
-                  'Create Project',
-                  style: AppTextStyle.withColor(
-                    AppTextStyle.buttonMedium,
-                    Colors.white,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).primaryColor,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -974,33 +835,36 @@ class _ListProjectScreenState extends State<ListProjectScreen>
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: [
-                'Newest',
-                'Oldest',
-                'Name (A-Z)',
-                'Name (Z-A)',
-                'Most Images',
-              ].map((filter) {
-                final isSelected = _selectedFilter == filter;
-                return FilterChip(
-                  label: Text(filter),
-                  selected: isSelected,
-                  onSelected: (selected) {
-                    setState(() {
-                      _selectedFilter = filter;
-                    });
-                    Get.back();
-                  },
-                  backgroundColor: Theme.of(context).cardColor,
-                  selectedColor: Theme.of(context).primaryColor.withOpacity(0.2),
-                  labelStyle: AppTextStyle.withColor(
-                    AppTextStyle.bodyMedium,
-                    isSelected
-                        ? Theme.of(context).primaryColor
-                        : Theme.of(context).textTheme.bodyLarge!.color!,
-                  ),
-                );
-              }).toList(),
+              children:
+                  [
+                    'Newest',
+                    'Oldest',
+                    'Name (A-Z)',
+                    'Name (Z-A)',
+                    'Most Images',
+                  ].map((filter) {
+                    final isSelected = _selectedFilter == filter;
+                    return FilterChip(
+                      label: Text(filter),
+                      selected: isSelected,
+                      onSelected: (selected) {
+                        setState(() {
+                          _selectedFilter = filter;
+                        });
+                        Get.back();
+                      },
+                      backgroundColor: Theme.of(context).cardColor,
+                      selectedColor: Theme.of(
+                        context,
+                      ).primaryColor.withOpacity(0.2),
+                      labelStyle: AppTextStyle.withColor(
+                        AppTextStyle.bodyMedium,
+                        isSelected
+                            ? Theme.of(context).primaryColor
+                            : Theme.of(context).textTheme.bodyLarge!.color!,
+                      ),
+                    );
+                  }).toList(),
             ),
             const SizedBox(height: 24),
             SizedBox(
@@ -1027,6 +891,53 @@ class _ListProjectScreenState extends State<ListProjectScreen>
         ),
       ),
     );
+  }
+
+  void _handleSearchChanged(String value) {
+    final query = value.trim();
+    setState(() {
+      _searchQuery = value;
+      if (query.isNotEmpty) {
+        _searchResults.clear();
+      }
+    });
+    _searchDebounce?.cancel();
+
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults.clear();
+        _isSearching = false;
+      });
+      return;
+    }
+
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      _performSearch(query);
+    });
+    setState(() {
+      _isSearching = true;
+    });
+  }
+
+  Future<void> _performSearch(String query) async {
+    setState(() => _isSearching = true);
+    try {
+      final controller = Get.find<ProjectController>();
+      final results = await controller.searchProjects(query);
+      if (!mounted || query != _searchQuery.trim()) return;
+      setState(() {
+        _searchResults
+          ..clear()
+          ..addAll(results);
+      });
+    } catch (_) {
+      if (!mounted || query != _searchQuery.trim()) return;
+      setState(() => _searchResults.clear());
+    } finally {
+      if (mounted && query == _searchQuery.trim()) {
+        setState(() => _isSearching = false);
+      }
+    }
   }
 
   String _formatDate(DateTime? date) {
@@ -1092,4 +1003,63 @@ class _StickyTabBarDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_StickyTabBarDelegate oldDelegate) {
     return false;
   }
+}
+
+class _CirclePatternPainter extends CustomPainter {
+  const _CirclePatternPainter({this.opacity = 0.12});
+  final double opacity;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final fill = Paint()
+      ..color = Colors.white.withOpacity(opacity)
+      ..style = PaintingStyle.fill;
+
+    final ring = Paint()
+      ..color = Colors.white.withOpacity(opacity + 0.05)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+
+    final rect = Offset.zero & size;
+    canvas.saveLayer(rect, Paint());
+
+    void circle(double x, double y, double r) {
+      final c = Offset(size.width * x, size.height * y);
+      canvas.drawCircle(c, r, fill);
+      canvas.drawCircle(c, r + 8, ring);
+    }
+
+    circle(0.18, 0.30, 60);
+    circle(0.82, 0.58, 80);
+    circle(0.48, 0.80, 40);
+    circle(0.90, 0.22, 50);
+    circle(0.10, 0.85, 30);
+    circle(0.34, 0.60, 24);
+
+    final dot = Paint()
+      ..color = Colors.white.withOpacity(opacity + 0.05)
+      ..style = PaintingStyle.fill;
+    for (double t = 0; t <= 1.0; t += 0.08) {
+      final p = Offset(size.width * t, size.height * (0.18 + 0.5 * t));
+      canvas.drawCircle(p, 2.2, dot);
+    }
+
+    canvas.restore();
+
+    final vignette = Paint()
+      ..shader = RadialGradient(
+        center: const Alignment(0.3, 0.2),
+        radius: 1.2,
+        colors: [
+          Colors.white.withOpacity(0.00),
+          Colors.white.withOpacity(0.06),
+        ],
+        stops: const [0.75, 1.0],
+      ).createShader(rect);
+    canvas.drawRect(rect, vignette);
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

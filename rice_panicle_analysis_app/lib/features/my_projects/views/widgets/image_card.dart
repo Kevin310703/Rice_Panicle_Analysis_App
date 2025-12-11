@@ -13,6 +13,7 @@ class ModernImageCard extends StatelessWidget {
   final bool isAnalyzed;
   final bool hasAnnotatedImage;
   final bool isProcessing;
+  final VoidCallback? onDelete;
 
   const ModernImageCard({
     super.key,
@@ -25,6 +26,7 @@ class ModernImageCard extends StatelessWidget {
     this.isAnalyzed = false,
     this.hasAnnotatedImage = false,
     this.isProcessing = false,
+    this.onDelete,
   });
 
   @override
@@ -69,10 +71,7 @@ class ModernImageCard extends StatelessWidget {
             child: Stack(
               children: [
                 // Image
-                ClipRRect(
-                  borderRadius: radius,
-                  child: _buildImage(isDark),
-                ),
+                ClipRRect(borderRadius: radius, child: _buildImage(isDark)),
 
                 // Gradient overlay
                 Container(
@@ -124,24 +123,20 @@ class ModernImageCard extends StatelessWidget {
                       color: Colors.white.withOpacity(0.95),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(
-                          Icons.grain_rounded,
-                          size: 14,
-                          color: Color(0xFF4CAF50),
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          bottomLabel,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                    child: Center(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            bottomLabel,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black87,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -169,6 +164,27 @@ class ModernImageCard extends StatelessWidget {
                     ),
                   ),
                 ),
+
+                if (onDelete != null)
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: GestureDetector(
+                      onTap: onDelete,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline,
+                          size: 16,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Green overlay when selected
                 AnimatedOpacity(
@@ -208,7 +224,7 @@ class ModernImageCard extends StatelessWidget {
               child: CircularProgressIndicator(
                 value: progress.expectedTotalBytes != null
                     ? progress.cumulativeBytesLoaded /
-                        progress.expectedTotalBytes!
+                          progress.expectedTotalBytes!
                     : null,
               ),
             ),
@@ -247,11 +263,7 @@ class ModernImageCard extends StatelessWidget {
     return Container(
       color: isDark ? Colors.grey[800] : Colors.grey[100],
       child: const Center(
-        child: Icon(
-          Icons.broken_image,
-          size: 40,
-          color: Colors.grey,
-        ),
+        child: Icon(Icons.broken_image, size: 40, color: Colors.grey),
       ),
     );
   }
@@ -267,4 +279,3 @@ class ModernImageCard extends StatelessWidget {
     return value;
   }
 }
-                

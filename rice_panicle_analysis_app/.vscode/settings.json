@@ -1,0 +1,4 @@
+{
+    "chatgpt.commentCodeLensEnabled": true,
+    "chat.agent.thinking.collapsedTools": "all"
+}

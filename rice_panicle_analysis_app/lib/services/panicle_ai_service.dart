@@ -1,48 +1,52 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:io';
-import 'dart:isolate';
 import 'dart:math' as math;
-import 'dart:typed_data';
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart'
-    show
-        BackgroundIsolateBinaryMessenger,
-        RootIsolateToken,
-        rootBundle;
-import 'package:flutter_onnxruntime/flutter_onnxruntime.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:ultralytics_yolo/yolo.dart';
 
-/// Immutable configuration used by [PanicleAiService].
 class PanicleModelConfig {
   const PanicleModelConfig({
-    this.modelAssetPath = 'assets/models/GrainNuber.onnx',
-    this.inputWidth = 640,
-    this.inputHeight = 640,
+    this.modelAssetPath = 'assets/models/base_float16.tflite',
+    this.labelsAssetPath = 'assets/models/labels.txt',
+    this.inputWidth = 1600,
+    this.inputHeight = 1600,
     this.inputChannels = 3,
     this.scoreThreshold = 0.25,
     this.iouThreshold = 0.45,
+    this.useGpu = false,
+    this.maxDetections = 400,
     this.classLabels = const ['Grain', 'Primary branch'],
   });
 
   final String modelAssetPath;
+  final String labelsAssetPath;
   final int inputWidth;
   final int inputHeight;
   final int inputChannels;
   final double scoreThreshold;
   final double iouThreshold;
+  final bool useGpu;
+  final int maxDetections;
   final List<String> classLabels;
 
   Map<String, Object?> toJson() {
     return {
       'modelAssetPath': modelAssetPath,
+      'labelsAssetPath': labelsAssetPath,
       'inputWidth': inputWidth,
       'inputHeight': inputHeight,
       'inputChannels': inputChannels,
       'scoreThreshold': scoreThreshold,
       'iouThreshold': iouThreshold,
+      'useGpu': useGpu,
+      'maxDetections': maxDetections,
       'classLabels': classLabels,
     };
   }
@@ -50,12 +54,16 @@ class PanicleModelConfig {
   factory PanicleModelConfig.fromJson(Map<String, dynamic> json) {
     return PanicleModelConfig(
       modelAssetPath:
-          json['modelAssetPath'] as String? ?? 'assets/models/GrainNuber.onnx',
+          json['modelAssetPath'] as String? ?? 'assets/models/best.tflite',
+      labelsAssetPath:
+          json['labelsAssetPath'] as String? ?? 'assets/models/labels.txt',
       inputWidth: json['inputWidth'] as int? ?? 640,
       inputHeight: json['inputHeight'] as int? ?? 640,
       inputChannels: json['inputChannels'] as int? ?? 3,
       scoreThreshold: (json['scoreThreshold'] as num?)?.toDouble() ?? 0.25,
-      iouThreshold: (json['iouThreshold'] as num?)?.toDouble() ?? 0.45,
+      iouThreshold: (json['iouThreshold'] as num?)?.toDouble() ?? 0.7,
+      useGpu: json['useGpu'] as bool? ?? true,
+      maxDetections: json['maxDetections'] as int? ?? 400,
       classLabels: List<String>.from(
         (json['classLabels'] as List<dynamic>? ??
                 const ['Grain', 'Primary branch'])
@@ -65,7 +73,7 @@ class PanicleModelConfig {
   }
 }
 
-/// Represents a single detection returned by the ONNX model.
+/// Represents a single detection returned by the model.
 class PanicleDetection {
   const PanicleDetection({
     required this.boundingBox,
@@ -87,12 +95,14 @@ class PanicleInferenceResult {
     required this.originalSize,
     required this.classLabels,
     this.source,
+    this.processingTimeMs,
   });
 
   final List<PanicleDetection> detections;
   final Size originalSize;
   final List<String> classLabels;
   final String? source;
+  final double? processingTimeMs;
 
   int get totalDetections => detections.length;
 
@@ -112,126 +122,289 @@ class PanicleInferenceResult {
   }
 }
 
-/// Facade that keeps UI work on the main isolate while delegating heavy model
-/// execution to a dedicated native-backed isolate.
+/// Facade for running Ultralytics YOLO inference over panicle images.
 class PanicleAiService {
-  PanicleAiService._({
-    PanicleModelConfig? config,
-    http.Client? client,
-  })  : _config = config ?? const PanicleModelConfig(),
-        _client = client ?? http.Client();
+  PanicleAiService._({PanicleModelConfig? config, http.Client? client})
+    : _config = config ?? const PanicleModelConfig(),
+      _client = client ?? http.Client();
 
   static final PanicleAiService instance = PanicleAiService._();
 
   final PanicleModelConfig _config;
   final http.Client _client;
+  static const int _transportMaxDimension = 1600;
+  static const int _transportJpegQuality = 85;
+  static const int _transportMaxBytes = 4 * 1024 * 1024;
 
-  RootIsolateToken? _rootIsolateToken;
-  _PanicleIsolateClient? _worker;
-  Future<_PanicleIsolateClient>? _workerLoader;
+  YOLO? _yolo;
+  Future<YOLO>? _pendingLoad;
+  List<String>? _labels;
+  String? _resolvedModelPath;
 
-  /// Warm-up the runtime so the first inference is faster.
   Future<void> warmUp() async {
-    final worker = await _ensureWorker();
-    await worker.warmUp();
+    await _ensureYolo();
   }
 
-  /// Releases the underlying native resources.
   void dispose() {
-    final worker = _worker;
-    _worker = null;
-    _workerLoader = null;
-    if (worker != null) {
-      unawaited(worker.dispose());
+    final yolo = _yolo;
+    _yolo = null;
+    _pendingLoad = null;
+    _resolvedModelPath = null;
+    if (yolo != null) {
+      unawaited(yolo.dispose());
     }
     _client.close();
   }
 
-  /// Runs inference on an image accessible via network or local asset path.
   Future<PanicleInferenceResult> analyzeRemoteImage(String path) async {
+    debugPrint('Panicle AI: downloading $path');
     final bytes = await _downloadBytes(path);
-    return analyzeBytes(bytes, source: path);
+    final optimized = await _optimizeImageForInference(bytes);
+    debugPrint('Panicle AI: running inference for $path');
+    return analyzeBytes(
+      optimized,
+      source: path,
+      optimizeForTransport: false,
+    );
   }
 
-  /// Loads raw bytes for an image regardless of its source.
-  Future<Uint8List> loadImageBytes(String path) {
-    return _downloadBytes(path);
-  }
+  Future<Uint8List> loadImageBytes(String path) => _downloadBytes(path);
 
-  /// Runs inference against raw image bytes.
   Future<PanicleInferenceResult> analyzeBytes(
     Uint8List imageBytes, {
     String? source,
+    bool optimizeForTransport = true,
   }) async {
-    final worker = await _ensureWorker();
-    final payload = await worker.runInference(imageBytes, source: source);
-    return _deserializeResult(payload);
-  }
+    if (imageBytes.isEmpty) {
+      throw ArgumentError('Empty image data received for analysis.');
+    }
 
-  Future<_PanicleIsolateClient> _ensureWorker() async {
-    final cached = _worker;
-    if (cached != null) return cached;
-    final loader = _workerLoader ??= _createWorker();
-    final worker = await loader;
-    _worker = worker;
-    _workerLoader = null;
-    return worker;
-  }
+    final optimized = optimizeForTransport
+        ? await _optimizeImageForInference(imageBytes)
+        : imageBytes;
+    final decoded = img.decodeImage(optimized);
+    if (decoded == null) {
+      throw ArgumentError('Unable to decode image bytes for analysis.');
+    }
 
-  Future<_PanicleIsolateClient> _createWorker() async {
-    _rootIsolateToken ??= RootIsolateToken.instance;
-    final token = _rootIsolateToken;
-    if (token == null) {
-      throw StateError(
-        'Root isolate token is not available. Ensure Flutter bindings are '
-        'initialized before using PanicleAiService.',
+    final model = await _ensureYolo();
+    final stopwatch = Stopwatch()..start();
+    final rawResult = await model.predict(
+      optimized,
+      confidenceThreshold: _config.scoreThreshold,
+      iouThreshold: _config.iouThreshold,
+      numItemsThreshold: _config.maxDetections,
+    );
+    stopwatch.stop();
+    final yoloResults = _resultsFromPredict(rawResult);
+    final labels = await _ensureLabels();
+    final rawDetections = _buildDetectionsFromResults(
+      yoloResults,
+      labels: labels,
+      originalWidth: decoded.width,
+      originalHeight: decoded.height,
+    );
+    final detections = _limitDetections(
+      rawDetections,
+      _config.maxDetections,
+    );
+
+    if (source != null) {
+      final processingMs = rawResult['processingTimeMs'];
+      final stats = processingMs == null ? '' : ' (${processingMs}ms)';
+      debugPrint(
+        'Panicle AI: ${detections.length} detections for $source$stats',
       );
     }
-    final worker = _PanicleIsolateClient(
-      config: _config,
-      rootIsolateToken: token,
-    );
-    await worker.initialize();
-    return worker;
-  }
 
-  PanicleInferenceResult _deserializeResult(Map<String, dynamic> payload) {
-    final detectionsRaw =
-        payload['detections'] as List<dynamic>? ?? const <dynamic>[];
-    final detections = detectionsRaw
-        .map((dynamic raw) => _deserializeDetection(raw))
-        .toList(growable: false);
-    final width = (payload['originalWidth'] as num?)?.toDouble() ?? 0;
-    final height = (payload['originalHeight'] as num?)?.toDouble() ?? 0;
-    final classLabels = List<String>.from(
-      (payload['classLabels'] as List<dynamic>? ?? _config.classLabels)
-          .map((dynamic value) => value.toString()),
-    );
+    double? processingMsDouble;
+    final rawProcessing = rawResult['processingTimeMs'];
+    if (rawProcessing is num) {
+      processingMsDouble = rawProcessing.toDouble();
+    } else if (rawProcessing is String) {
+      processingMsDouble = double.tryParse(rawProcessing);
+    } else if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+      processingMsDouble = stopwatch.elapsedMicroseconds / 1000;
+    } else {
+      processingMsDouble = stopwatch.elapsedMicroseconds / 1000;
+    }
 
     return PanicleInferenceResult(
       detections: detections,
-      originalSize: Size(width, height),
-      classLabels: classLabels,
-      source: payload['source'] as String?,
+      originalSize: Size(decoded.width.toDouble(), decoded.height.toDouble()),
+      classLabels: labels,
+      source: source,
+      processingTimeMs: processingMsDouble,
     );
   }
 
-  PanicleDetection _deserializeDetection(dynamic raw) {
-    final map = Map<String, dynamic>.from(raw as Map<dynamic, dynamic>);
-    final rect = Map<String, dynamic>.from(
-      map['boundingBox'] as Map<dynamic, dynamic>,
+  Future<YOLO> _ensureYolo() {
+    final cached = _yolo;
+    if (cached != null) {
+      return Future<YOLO>.value(cached);
+    }
+    final pending = _pendingLoad;
+    if (pending != null) {
+      return pending;
+    }
+    final loader = _createAndLoadYolo();
+    _pendingLoad = loader;
+    return loader;
+  }
+
+  Future<YOLO> _createAndLoadYolo() async {
+    try {
+      final modelPath = await _resolveModelPath(_config.modelAssetPath);
+      final instance = YOLO(
+        modelPath: modelPath,
+        task: YOLOTask.detect,
+        useGpu: _config.useGpu,
+      );
+      await instance.loadModel();
+      instance.setNumItemsThreshold(_config.maxDetections);
+      _yolo = instance;
+      return instance;
+    } finally {
+      _pendingLoad = null;
+    }
+  }
+
+  Future<String> _resolveModelPath(String configuredPath) async {
+    if (_resolvedModelPath != null) return _resolvedModelPath!;
+    if (configuredPath.startsWith('/') || configuredPath.startsWith('file://')) {
+      _resolvedModelPath = configuredPath;
+      return configuredPath;
+    }
+    if (!configuredPath.startsWith('assets/')) {
+      _resolvedModelPath = configuredPath;
+      return configuredPath;
+    }
+    final bytes = await rootBundle.load(configuredPath);
+    final directory = await getApplicationSupportDirectory();
+    final folder = Directory(p.join(directory.path, 'panicle_ai_models'));
+    if (!await folder.exists()) {
+      await folder.create(recursive: true);
+    }
+    final file = File(p.join(folder.path, p.basename(configuredPath)));
+    await file.writeAsBytes(
+      bytes.buffer.asUint8List(),
+      flush: true,
     );
-    return PanicleDetection(
-      boundingBox: Rect.fromLTRB(
-        (rect['left'] as num).toDouble(),
-        (rect['top'] as num).toDouble(),
-        (rect['right'] as num).toDouble(),
-        (rect['bottom'] as num).toDouble(),
-      ),
-      confidence: (map['confidence'] as num).toDouble(),
-      classIndex: map['classIndex'] as int? ?? 0,
-      label: map['label'] as String? ?? 'unknown',
-    );
+    _resolvedModelPath = file.path;
+    return file.path;
+  }
+
+  List<YOLOResult> _resultsFromPredict(Map<String, dynamic> raw) {
+    final detections = raw['detections'];
+    if (detections is List) {
+      final results = <YOLOResult>[];
+      for (final item in detections) {
+        if (item is Map) {
+          results.add(YOLOResult.fromMap(item));
+        }
+      }
+      return results;
+    }
+    return const [];
+  }
+
+  List<PanicleDetection> _buildDetectionsFromResults(
+    List<YOLOResult> results, {
+    required List<String> labels,
+    required int originalWidth,
+    required int originalHeight,
+  }) {
+    final widthLimit = math.max(1, originalWidth).toDouble();
+    final heightLimit = math.max(1, originalHeight).toDouble();
+    final detections = <PanicleDetection>[];
+
+    for (final result in results) {
+      final score = result.confidence;
+      if (score < _config.scoreThreshold) continue;
+
+      final rect = result.boundingBox;
+      final left = rect.left.clamp(0, widthLimit).toDouble();
+      final top = rect.top.clamp(0, heightLimit).toDouble();
+      final right = rect.right.clamp(0, widthLimit).toDouble();
+      final bottom = rect.bottom.clamp(0, heightLimit).toDouble();
+      final width = math.max(0.0, right - left);
+      final height = math.max(0.0, bottom - top);
+      if (width <= 0 || height <= 0) {
+        continue;
+      }
+
+      int classIndex = result.classIndex;
+      final className = result.className.trim();
+      int? derivedIndex;
+      if (className.isNotEmpty) {
+        final parsed = int.tryParse(className);
+        if (parsed != null) {
+          derivedIndex = parsed;
+        } else {
+          final matchIndex = labels.indexWhere(
+            (entry) => entry.toLowerCase() == className.toLowerCase(),
+          );
+          if (matchIndex >= 0) {
+            derivedIndex = matchIndex;
+          }
+        }
+      }
+      if (classIndex < 0 ||
+          classIndex >= labels.length ||
+          (classIndex == 0 && derivedIndex != null && derivedIndex != 0)) {
+        if (derivedIndex != null) {
+          classIndex = derivedIndex.clamp(0, labels.length - 1);
+        }
+      }
+
+      final label = _labelFor(classIndex, labels);
+
+      detections.add(
+        PanicleDetection(
+          boundingBox: Rect.fromLTWH(left, top, width, height),
+          confidence: score,
+          classIndex: classIndex,
+          label: label,
+        ),
+      );
+    }
+
+    return detections;
+  }
+
+  List<PanicleDetection> _limitDetections(
+    List<PanicleDetection> detections,
+    int maxDetections,
+  ) {
+    if (maxDetections <= 0 || detections.length <= maxDetections) {
+      return detections;
+    }
+    final sorted = List<PanicleDetection>.from(detections)
+      ..sort((a, b) => b.confidence.compareTo(a.confidence));
+    return sorted.take(maxDetections).toList();
+  }
+
+  Future<List<String>> _ensureLabels() async {
+    final cached = _labels;
+    if (cached != null && cached.isNotEmpty) {
+      return cached;
+    }
+    try {
+      final raw = await rootBundle.loadString(_config.labelsAssetPath);
+      final parsed = raw
+          .split(RegExp(r'[\r\n]+'))
+          .map((line) => line.trim())
+          .where((line) => line.isNotEmpty)
+          .toList();
+      if (parsed.isNotEmpty) {
+        _labels = parsed;
+        return parsed;
+      }
+    } catch (error) {
+      debugPrint('Panicle AI: unable to load labels (${error.toString()})');
+    }
+    _labels = _config.classLabels;
+    return _labels!;
   }
 
   Future<Uint8List> _downloadBytes(String path) async {
@@ -266,543 +439,93 @@ class PanicleAiService {
   Future<Uint8List> _readLocalFile(String path) async {
     final file = File(path);
     if (!await file.exists()) {
-      throw Exception('File not found at $path');
+      throw Exception('File not found at $path.');
     }
     return file.readAsBytes();
   }
-}
 
-class _PanicleIsolateClient {
-  _PanicleIsolateClient({
-    required this.config,
-    required this.rootIsolateToken,
-  });
+  Future<Uint8List> _optimizeImageForInference(Uint8List rawBytes) async {
+    final decoded = img.decodeImage(rawBytes);
+    if (decoded == null) return rawBytes;
 
-  final PanicleModelConfig config;
-  final RootIsolateToken rootIsolateToken;
-
-  ReceivePort? _receivePort;
-  StreamSubscription<dynamic>? _subscription;
-  SendPort? _sendPort;
-  Isolate? _isolate;
-  final Map<int, Completer<Map<String, dynamic>>> _pending = {};
-  int _requestId = 0;
-
-  Future<void> initialize() async {
-    if (_sendPort != null) return;
-    final receivePort = ReceivePort();
-    _receivePort = receivePort;
-    final ready = Completer<SendPort>();
-
-    _subscription = receivePort.listen((dynamic message) {
-      if (message is SendPort && !ready.isCompleted) {
-        ready.complete(message);
-        return;
-      }
-      _handleMessage(message);
-    });
-
-    _isolate = await Isolate.spawn<List<dynamic>>(
-      _panicleWorkerEntry,
-      <dynamic>[
-        receivePort.sendPort,
-        config.toJson(),
-        rootIsolateToken,
-      ],
-      debugName: 'PanicleAiWorker',
-    );
-
-    _sendPort = await ready.future;
-  }
-
-  Future<void> warmUp() async {
-    await _sendRequest('warmUp');
-  }
-
-  Future<Map<String, dynamic>> runInference(
-    Uint8List bytes, {
-    String? source,
-  }) async {
-    final response = await _sendRequest(
-      'analyze',
-      payload: <String, Object?>{
-        'bytes': TransferableTypedData.fromList([bytes]),
-        if (source != null) 'source': source,
-      },
-    );
-    return Map<String, dynamic>.from(
-      response['result'] as Map<dynamic, dynamic>,
-    );
-  }
-
-  Future<Map<String, dynamic>> _sendRequest(
-    String action, {
-    Map<String, Object?>? payload,
-  }) {
-    final sendPort = _sendPort;
-    if (sendPort == null) {
-      throw StateError('Panicle AI worker is not initialized.');
+    final maxDim = math.max(decoded.width, decoded.height);
+    final needsResize = maxDim > _transportMaxDimension;
+    final needsCompress = rawBytes.lengthInBytes > _transportMaxBytes;
+    if (!needsResize && !needsCompress) {
+      return rawBytes;
     }
-    final id = ++_requestId;
-    final completer = Completer<Map<String, dynamic>>();
-    _pending[id] = completer;
 
-    final message = <String, Object?>{
-      'id': id,
-      'action': action,
-      if (payload != null) ...payload,
-    };
-
-    sendPort.send(message);
-    return completer.future;
-  }
-
-  void _handleMessage(dynamic message) {
-    if (message is! Map) return;
-    final id = message['id'];
-    if (id is! int) return;
-    final completer = _pending.remove(id);
-    if (completer == null) return;
-
-    final status = message['status'] as String? ?? 'ok';
-    if (status == 'ok') {
-      completer.complete(Map<String, dynamic>.from(message));
-    } else {
-      final error =
-          message['error']?.toString() ?? 'Panicle AI worker encountered an error.';
-      final stack = message['stack']?.toString();
-      completer.completeError(
-        StateError(error),
-        stack == null ? null : StackTrace.fromString(stack),
+    img.Image working = decoded;
+    if (needsResize) {
+      final scale = _transportMaxDimension / maxDim;
+      final targetWidth = (decoded.width * scale).round().clamp(
+        1,
+        decoded.width,
       );
-    }
-  }
-
-  Future<void> dispose() async {
-    try {
-      await _sendRequest('dispose');
-    } catch (_) {
-      // Worker may already be shut down.
-    }
-    _sendPort = null;
-    await _subscription?.cancel();
-    _subscription = null;
-    _receivePort?.close();
-    _receivePort = null;
-    _isolate?.kill(priority: Isolate.immediate);
-    _isolate = null;
-
-    for (final completer in _pending.values) {
-      if (!completer.isCompleted) {
-        completer.completeError(
-          StateError('Panicle AI worker disposed before finishing pending jobs.'),
-        );
-      }
-    }
-    _pending.clear();
-  }
-}
-
-Future<void> _panicleWorkerEntry(List<dynamic> args) async {
-  final SendPort replyPort = args[0] as SendPort;
-  final Map<String, dynamic> configMap =
-      Map<String, dynamic>.from(args[1] as Map<dynamic, dynamic>);
-  final RootIsolateToken rootToken = args[2] as RootIsolateToken;
-  final receivePort = ReceivePort();
-  replyPort.send(receivePort.sendPort);
-
-  BackgroundIsolateBinaryMessenger.ensureInitialized(rootToken);
-
-  final runtime = _PanicleWorkerRuntime(
-    config: PanicleModelConfig.fromJson(configMap),
-  );
-
-  await for (final dynamic raw in receivePort) {
-    if (raw is! Map) continue;
-    final String? action = raw['action'] as String?;
-    final int? id = raw['id'] as int?;
-    if (action == null) continue;
-    try {
-      switch (action) {
-        case 'warmUp':
-          await runtime.warmUp();
-          replyPort.send({'id': id, 'status': 'ok'});
-          break;
-        case 'analyze':
-          final transferable =
-              raw['bytes'] as TransferableTypedData?;
-          if (transferable == null) {
-            throw ArgumentError('Image bytes are required for analysis.');
-          }
-          final bytes = transferable.materialize().asUint8List();
-          final source = raw['source'] as String?;
-          final result = await runtime.analyze(bytes, source: source);
-          replyPort.send({'id': id, 'status': 'ok', 'result': result});
-          break;
-        case 'dispose':
-          await runtime.dispose();
-          replyPort.send({'id': id, 'status': 'ok'});
-          receivePort.close();
-          return;
-        default:
-          throw UnsupportedError('Unknown worker action: $action');
-      }
-    } catch (err, stack) {
-      replyPort.send({
-        'id': id,
-        'status': 'error',
-        'error': err.toString(),
-        'stack': stack.toString(),
-      });
-    }
-  }
-}
-
-class _PanicleWorkerRuntime {
-  _PanicleWorkerRuntime({required PanicleModelConfig config})
-      : _config = config,
-        _runtime = OnnxRuntime(),
-        _modelInputWidth = config.inputWidth,
-        _modelInputHeight = config.inputHeight;
-
-  final PanicleModelConfig _config;
-  final OnnxRuntime _runtime;
-  OrtSession? _session;
-  Future<OrtSession>? _sessionLoader;
-  int _modelInputWidth;
-  int _modelInputHeight;
-  bool _shapeResolved = false;
-
-  Future<void> warmUp() async {
-    await _ensureSession();
-  }
-
-  Future<Map<String, dynamic>> analyze(
-    Uint8List bytes, {
-    String? source,
-  }) async {
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
-      throw ArgumentError('Khong the doc du lieu anh de phan tich.');
-    }
-
-    final session = await _ensureSession();
-    final targetWidth = _modelInputWidth;
-    final targetHeight = _modelInputHeight;
-    final resized = img.copyResize(
-      decoded,
-      width: targetWidth,
-      height: targetHeight,
-      interpolation: img.Interpolation.cubic,
-    );
-
-    OrtValue? inputTensor;
-    Map<String, OrtValue>? outputs;
-
-    try {
-      inputTensor = await _buildInputTensor(
-        resized,
-        targetWidth: targetWidth,
-        targetHeight: targetHeight,
+      final targetHeight = (decoded.height * scale).round().clamp(
+        1,
+        decoded.height,
       );
-      outputs = await _runInference(session, inputTensor);
-      final firstOutput =
-          outputs.values.isEmpty ? null : outputs.values.first;
-      if (firstOutput == null) {
-        throw StateError('Khong nhan duoc du lieu dau ra tu mo hinh.');
-      }
-
-      final detections = await _parseDetections(
-        firstOutput,
-        originalWidth: decoded.width,
-        originalHeight: decoded.height,
-        processedWidth: targetWidth,
-        processedHeight: targetHeight,
-      );
-
-      return _serializeResult(
-        detections: detections,
-        originalWidth: decoded.width,
-        originalHeight: decoded.height,
-        source: source,
-      );
-    } finally {
-      if (inputTensor != null) {
-        await inputTensor.dispose();
-      }
-      if (outputs != null) {
-        for (final value in outputs.values) {
-          await value.dispose();
-        }
-      }
-    }
-  }
-
-  Future<void> dispose() async {
-    final session = _session;
-    _session = null;
-    if (session != null) {
-      await session.close();
-    }
-  }
-
-  Future<OrtSession> _ensureSession() async {
-    if (_session != null) {
-      if (!_shapeResolved) {
-        await _initializeModelShape(_session!);
-      }
-      return _session!;
-    }
-    _sessionLoader ??= _createSession();
-    return _sessionLoader!;
-  }
-
-  Future<OrtSession> _createSession() async {
-    try {
-      final options = OrtSessionOptions(
-        intraOpNumThreads: 1,
-        interOpNumThreads: 1,
-      );
-      final session = await _runtime.createSessionFromAsset(
-        _config.modelAssetPath,
-        options: options,
-      );
-      await _initializeModelShape(session);
-      _session = session;
-      return session;
-    } catch (err, stack) {
-      debugPrint('Failed to initialize ONNX session: $err\n$stack');
-      rethrow;
-    } finally {
-      _sessionLoader = null;
-    }
-  }
-
-  Future<Map<String, OrtValue>> _runInference(
-    OrtSession session,
-    OrtValue input,
-  ) {
-    final inputs = <String, OrtValue>{
-      session.inputNames.first: input,
-    };
-    return session.run(inputs);
-  }
-
-  Future<void> _initializeModelShape(OrtSession session) async {
-    if (_shapeResolved) return;
-    try {
-      final info = await session.getInputInfo();
-      if (info.isEmpty) return;
-      final shape = info.first['shape'];
-      if (shape is List && shape.length >= 4) {
-        final dims = shape.map((dynamic value) {
-          if (value is num) return value.toInt();
-          return null;
-        }).toList();
-        if (dims.contains(null)) return;
-        int? height;
-        int? width;
-        if (dims[1] == _config.inputChannels) {
-          height = dims[2];
-          width = dims[3];
-        } else {
-          height = dims[1];
-          width = dims[2];
-        }
-        if (height != null && height > 0) {
-          _modelInputHeight = height;
-        }
-        if (width != null && width > 0) {
-          _modelInputWidth = width;
-        }
-        _shapeResolved = true;
-      }
-    } catch (err, stack) {
-      debugPrint('Failed to read model input shape: $err\n$stack');
-    }
-  }
-
-  Future<OrtValue> _buildInputTensor(
-    img.Image image, {
-    required int targetWidth,
-    required int targetHeight,
-  }) {
-    final floats = _imageToFloat32(image);
-    final shape = [
-      1,
-      _config.inputChannels,
-      targetHeight,
-      targetWidth,
-    ];
-    return OrtValue.fromList(floats, shape);
-  }
-
-  Float32List _imageToFloat32(img.Image image) {
-    final bytes = image.getBytes(order: img.ChannelOrder.rgb);
-    final planeSize = image.width * image.height;
-    final data = Float32List(planeSize * _config.inputChannels);
-
-    for (var i = 0; i < planeSize; i++) {
-      final r = bytes[i * 3];
-      final g = bytes[i * 3 + 1];
-      final b = bytes[i * 3 + 2];
-      data[i] = r / 255.0;
-      data[planeSize + i] = g / 255.0;
-      data[planeSize * 2 + i] = b / 255.0;
-    }
-
-    return data;
-  }
-
-  Future<List<PanicleDetection>> _parseDetections(
-    OrtValue output, {
-    required int originalWidth,
-    required int originalHeight,
-    required int processedWidth,
-    required int processedHeight,
-  }) async {
-    final value = await output.asList();
-    final rows = _transposeOutput(value);
-    final detections = <PanicleDetection>[];
-    final xFactor = originalWidth / processedWidth;
-    final yFactor = originalHeight / processedHeight;
-
-    for (final row in rows) {
-      if (row.length < 6) continue;
-      final classesScores = row
-          .sublist(4)
-          .map((e) => (e as num).toDouble())
-          .toList(growable: false);
-      if (classesScores.isEmpty) continue;
-
-      final maxScore = classesScores.reduce(math.max);
-      if (maxScore < _config.scoreThreshold) continue;
-      final classId = classesScores.indexOf(maxScore);
-
-      final cx = (row[0] as num).toDouble();
-      final cy = (row[1] as num).toDouble();
-      final w = (row[2] as num).toDouble();
-      final h = (row[3] as num).toDouble();
-
-      final left = (cx - w / 2) * xFactor;
-      final top = (cy - h / 2) * yFactor;
-      final width = w * xFactor;
-      final height = h * yFactor;
-
-      detections.add(
-        PanicleDetection(
-          boundingBox: Rect.fromLTWH(
-            left.clamp(0, originalWidth.toDouble()),
-            top.clamp(0, originalHeight.toDouble()),
-            width,
-            height,
-          ),
-          confidence: maxScore,
-          classIndex: classId,
-          label: _labelFor(classId),
-        ),
+      working = img.copyResize(
+        decoded,
+        width: targetWidth,
+        height: targetHeight,
+        interpolation: img.Interpolation.linear,
       );
     }
 
-    return _applyNonMaxSuppression(detections);
+    final encoded = img.encodeJpg(working, quality: _transportJpegQuality);
+    final optimized = Uint8List.fromList(encoded);
+    return optimized.lengthInBytes < rawBytes.lengthInBytes
+        ? optimized
+        : rawBytes;
   }
 
-  List<List<double>> _transposeOutput(List<dynamic> value) {
-    List<dynamic> tensor = value;
-    while (tensor.length == 1 && tensor.first is List) {
-      tensor = tensor.first as List<dynamic>;
-    }
-    if (tensor.isEmpty || tensor.first is! List) {
-      return const [];
-    }
-    final channels = tensor.length;
-    final anchors = (tensor.first as List).length;
-    final rows = List<List<double>>.generate(
-      anchors,
-      (anchor) => List<double>.filled(channels, 0),
-      growable: false,
-    );
-    for (var c = 0; c < channels; c++) {
-      final column = tensor[c] as List;
-      for (var anchor = 0; anchor < anchors; anchor++) {
-        rows[anchor][c] = (column[anchor] as num).toDouble();
-      }
-    }
-    return rows;
-  }
+  // List<PanicleDetection> _applyNonMaxSuppression(
+  //   List<PanicleDetection> detections,
+  // ) {
+  //   if (detections.length < 2) return detections;
 
-  List<PanicleDetection> _applyNonMaxSuppression(
-    List<PanicleDetection> detections,
-  ) {
-    if (detections.length < 2) return detections;
+  //   final sorted = List<PanicleDetection>.from(detections)
+  //     ..sort((a, b) => b.confidence.compareTo(a.confidence));
+  //   final kept = <PanicleDetection>[];
 
-    final sorted = List<PanicleDetection>.from(detections)
-      ..sort((a, b) => b.confidence.compareTo(a.confidence));
-    final kept = <PanicleDetection>[];
+  //   for (final detection in sorted) {
+  //     var shouldSelect = true;
+  //     for (final existing in kept) {
+  //       if (detection.classIndex == existing.classIndex) {
+  //         final overlap = _iou(detection.boundingBox, existing.boundingBox);
+  //         if (overlap > _config.iouThreshold) {
+  //           shouldSelect = false;
+  //           break;
+  //         }
+  //       }
+  //     }
+  //     if (shouldSelect) {
+  //       kept.add(detection);
+  //     }
+  //   }
+  //   return kept;
+  // }
 
-    for (final detection in sorted) {
-      var shouldSelect = true;
-      for (final existing in kept) {
-        if (detection.classIndex == existing.classIndex) {
-          final overlap = _iou(detection.boundingBox, existing.boundingBox);
-          if (overlap > _config.iouThreshold) {
-            shouldSelect = false;
-            break;
-          }
-        }
-      }
-      if (shouldSelect) {
-        kept.add(detection);
-      }
-    }
-    return kept;
-  }
+  // double _iou(Rect a, Rect b) {
+  //   final x1 = math.max(a.left, b.left);
+  //   final y1 = math.max(a.top, b.top);
+  //   final x2 = math.min(a.right, b.right);
+  //   final y2 = math.min(a.bottom, b.bottom);
+  //   if (x2 <= x1 || y2 <= y1) {
+  //     return 0;
+  //   }
+  //   final intersection = (x2 - x1) * (y2 - y1);
+  //   final union = a.width * a.height + b.width * b.height - intersection;
+  //   if (union <= 0) return 0;
+  //   return intersection / union;
+  // }
 
-  double _iou(Rect a, Rect b) {
-    final x1 = math.max(a.left, b.left);
-    final y1 = math.max(a.top, b.top);
-    final x2 = math.min(a.right, b.right);
-    final y2 = math.min(a.bottom, b.bottom);
-    if (x2 <= x1 || y2 <= y1) {
-      return 0;
-    }
-    final intersection = (x2 - x1) * (y2 - y1);
-    final union = a.width * a.height + b.width * b.height - intersection;
-    if (union <= 0) return 0;
-    return intersection / union;
-  }
-
-  String _labelFor(int classIndex) {
-    if (classIndex >= 0 && classIndex < _config.classLabels.length) {
-      return _config.classLabels[classIndex];
+  String _labelFor(int classIndex, List<String> labels) {
+    if (classIndex >= 0 && classIndex < labels.length) {
+      return labels[classIndex];
     }
     return 'class_$classIndex';
-  }
-
-  Map<String, dynamic> _serializeResult({
-    required List<PanicleDetection> detections,
-    required int originalWidth,
-    required int originalHeight,
-    String? source,
-  }) {
-    return {
-      'source': source,
-      'originalWidth': originalWidth.toDouble(),
-      'originalHeight': originalHeight.toDouble(),
-      'classLabels': _config.classLabels,
-      'detections': detections
-          .map((detection) => {
-                'boundingBox': {
-                  'left': detection.boundingBox.left,
-                  'top': detection.boundingBox.top,
-                  'right': detection.boundingBox.right,
-                  'bottom': detection.boundingBox.bottom,
-                },
-                'confidence': detection.confidence,
-                'classIndex': detection.classIndex,
-                'label': detection.label,
-              })
-          .toList(growable: false),
-    };
   }
 }

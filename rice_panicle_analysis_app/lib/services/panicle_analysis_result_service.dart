@@ -1,6 +1,6 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart' as img;
@@ -8,15 +8,20 @@ import 'package:image/image.dart' as img;
 import 'package:rice_panicle_analysis_app/features/my_projects/models/analysis_result.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/image_panicle.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
+import 'package:rice_panicle_analysis_app/features/notifications/models/notification.dart';
 import 'package:rice_panicle_analysis_app/services/local_analysis_result_storage_service.dart';
+import 'package:rice_panicle_analysis_app/services/notification_supabase_service.dart';
 import 'package:rice_panicle_analysis_app/services/panicle_ai_service.dart';
 import 'package:rice_panicle_analysis_app/services/project_supabase_service.dart';
+import 'package:rice_panicle_analysis_app/services/supabase_auth_service.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PanicleAnalysisResultService {
   PanicleAnalysisResultService._();
 
   static final PanicleAnalysisResultService instance =
       PanicleAnalysisResultService._();
+  static const bool _remoteSyncEnabled = false;
 
   final PanicleAiService _aiService = PanicleAiService.instance;
   final LocalAnalysisResultStorageService _localStorage =
@@ -40,9 +45,10 @@ class PanicleAnalysisResultService {
       totalSpikelets: metrics.total,
       filledRatio: metrics.ratio,
       confidence: metrics.averageConfidence,
-      modelVersion: 'onnx-local',
+      modelVersion: 'tflite-local',
       processedAt: timestamp,
       isSynced: false,
+      processingTimeMs: inference.processingTimeMs,
     );
 
     final localPath = await _localStorage.saveBoundingImage(
@@ -57,21 +63,37 @@ class PanicleAnalysisResultService {
       hillId: panicle.hillId,
       result: result,
     );
+    _logResult(result);
 
-    unawaited(
-      _syncToSupabase(
-        project: project,
-        panicle: panicle,
-        result: result,
-        overlayBytes: overlayBytes,
-      ),
-    );
+    if (_remoteSyncEnabled) {
+      unawaited(
+        _syncToSupabase(
+          project: project,
+          panicle: panicle,
+          result: result,
+          overlayBytes: overlayBytes,
+        ),
+      );
+    } else {
+      debugPrint('Remote sync disabled: results stored locally only.');
+    }
 
+    _notifyAnalysisCompleted(project);
     return result;
   }
 
   Future<void> deleteProject(String projectId) async {
     await _localStorage.deleteProject(projectId);
+  }
+
+  Future<void> deleteResultsForImage({
+    required String projectId,
+    required String imageId,
+  }) async {
+    await _localStorage.deleteResultsForImage(
+      projectId: projectId,
+      imageId: imageId,
+    );
   }
 
   Future<List<AnalysisResult>> getLocalResults(String projectId) {
@@ -84,6 +106,16 @@ class PanicleAnalysisResultService {
     required AnalysisResult result,
     required Uint8List overlayBytes,
   }) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) {
+      debugPrint('Skip sync: no Supabase session.');
+      return;
+    }
+    if (!await _hasNetworkConnectivity()) {
+      debugPrint('Skip sync: offline mode.');
+      return;
+    }
+
     try {
       final remoteUrl =
           await ProjectSupabaseService.uploadAnalysisBoundingImage(
@@ -128,6 +160,30 @@ class PanicleAnalysisResultService {
     }
   }
 
+  Future<bool> _hasNetworkConnectivity() async {
+    try {
+      final result = await InternetAddress.lookup('supabase.co').timeout(
+        const Duration(seconds: 3),
+      );
+      return result.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _notifyAnalysisCompleted(Project project) {
+    final userId = SupabaseAuthService.currentUser?.id;
+    if (userId == null) return;
+    unawaited(
+      NotificationSupabaseService.createNotification(
+        userId: userId,
+        type: NotificationType.analysis,
+        title: 'Analysis finished',
+        message: 'AI finished processing images for ${project.projectName}.',
+      ),
+    );
+  }
+
   Future<Uint8List> _renderBoundingImage(
     Uint8List bytes,
     PanicleInferenceResult inference,
@@ -144,29 +200,56 @@ class PanicleAnalysisResultService {
     );
 
     final detections = inference.detections;
+    final inferenceWidth =
+        inference.originalSize.width <= 0 ? decoded.width.toDouble() : inference.originalSize.width;
+    final inferenceHeight =
+        inference.originalSize.height <= 0 ? decoded.height.toDouble() : inference.originalSize.height;
+    final scaleX = inferenceWidth == 0 ? 1.0 : decoded.width / inferenceWidth;
+    final scaleY = inferenceHeight == 0 ? 1.0 : decoded.height / inferenceHeight;
     final palette = _labelPalette(detections);
     for (final detection in detections) {
       final rect = detection.boundingBox;
+      final adjustedLeft = (rect.left * scaleX).clamp(0, decoded.width - 1);
+      final adjustedTop = (rect.top * scaleY).clamp(0, decoded.height - 1);
+      final adjustedRight = (rect.right * scaleX).clamp(0, decoded.width - 1);
+      final adjustedBottom = (rect.bottom * scaleY).clamp(0, decoded.height - 1);
       final color = palette[detection.label] ?? img.ColorRgb8(76, 175, 80);
       img.drawRect(
         canvas,
-        x1: rect.left.round().clamp(0, canvas.width - 1),
-        y1: rect.top.round().clamp(0, canvas.height - 1),
-        x2: rect.right.round().clamp(0, canvas.width - 1),
-        y2: rect.bottom.round().clamp(0, canvas.height - 1),
+        x1: adjustedLeft.round(),
+        y1: adjustedTop.round(),
+        x2: adjustedRight.round(),
+        y2: adjustedBottom.round(),
         color: color,
         thickness: max(2, (canvas.width * 0.002).round()),
+      );
+      final labelText = detection.label;
+      final textX = adjustedLeft.round().clamp(0, canvas.width - 1);
+      final textY = max(0, adjustedTop.round() - 40);
+      img.drawString(
+        canvas,
+        labelText,
+        font: img.arial48,
+        x: textX,
+        y: textY,
+        color: color,
       );
     }
 
     return Uint8List.fromList(img.encodePng(canvas));
   }
 
-  Map<String, img.Color> _labelPalette(List<PanicleDetection> detections) {
-    final colors = <String, img.Color>{};
+Map<String, img.Color> _labelPalette(List<PanicleDetection> detections) {
+  final colors = <String, img.Color>{};
+  final defaultColors = <String, img.Color>{
+    'Grain': img.ColorRgb8(76, 175, 80),
+    'Primary branch': img.ColorRgb8(255, 193, 7),
+  };
 
-    for (final detection in detections) {
-      colors.putIfAbsent(detection.label, () {
+  for (final detection in detections) {
+    colors.putIfAbsent(detection.label, () {
+      final preset = defaultColors[detection.label];
+      if (preset != null) return preset;
         // Tạo seed cố định dựa trên label → màu luôn giống nhau cho cùng label
         final seed = detection.label.hashCode;
 
@@ -226,4 +309,14 @@ class _Metrics {
       averageConfidence: avgConfidence,
     );
   }
+
+}
+
+void _logResult(AnalysisResult result) {
+  debugPrint(
+    'Analysis result -> id:${result.id} '
+    'grains:${result.grains} primary:${result.primaryBranch} '
+    'total:${result.totalSpikelets} ratio:${(result.filledRatio * 100).toStringAsFixed(1)}% '
+    'confidence:${(result.confidence * 100).toStringAsFixed(1)}%',
+  );
 }

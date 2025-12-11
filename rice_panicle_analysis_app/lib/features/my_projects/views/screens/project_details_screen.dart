@@ -40,6 +40,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   final ScrollController _regionScrollCtrl = ScrollController();
   late final PageController _pageController;
+  Worker? _activeProjectWorker;
 
   TabController? _tabController;
   int _currentRegion = 0;
@@ -66,6 +67,12 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     });
     _projectController = Get.find<ProjectController>();
     _projectController.setActiveProject(_project);
+    _activeProjectWorker = ever<Project?>(_projectController.projectChanges, (
+      updated,
+    ) {
+      if (!mounted || updated == null) return;
+      setState(() => _project = updated);
+    });
     _pageController = PageController(initialPage: _currentRegion);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_hills.isNotEmpty) {
@@ -79,6 +86,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     _pageController.dispose();
     _regionScrollCtrl.dispose();
     _tabController?.dispose();
+    _activeProjectWorker?.dispose();
     super.dispose();
   }
 
@@ -135,6 +143,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       onAddRegion: _showCreateRegionDialog,
       isDark: isDark,
       scrollController: _regionScrollCtrl,
+      onRenameHill: _promptRenameHill,
+      onDeleteHill: _confirmDeleteHill,
     );
   }
 
@@ -211,8 +221,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     final hillImages = _imagesForHill(hill.id);
     final resultMap = _latestResultsByImage();
     final previewUrls = hillImages.map((img) => img.imagePath).toList();
-    final annotatedPreviews =
-        _annotatedPathsFor(hillImages, resultMap);
+    final annotatedPreviews = _annotatedPathsFor(hillImages, resultMap);
     final resultList = _resultsFor(hillImages, resultMap);
 
     return ImageGridView(
@@ -222,23 +231,60 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       isDark: isDark,
       projectController: _projectController,
       analysisByImage: resultMap,
+      onImagesChanged: _refreshProject,
       onImageTap: (index) {
         Get.to(
           () => ImagePreviewScreen(
+            projectId: _project.id,
+            imageIds: hillImages.map((img) => img.id).toList(),
             imageUrls: previewUrls,
             annotatedImageUrls: annotatedPreviews,
             analysisResults: resultList,
             initialIndex: index,
-            onAnalyzeOne: (idx) {
-              // TODO: analyze one image
+            onAnalyzeOne: (idx) async {
+              await _analyzeImagesFromPreview(
+                hill: hill,
+                hillImages: hillImages,
+                indexes: [idx],
+              );
             },
-            onAnalyzeAll: () {
-              // TODO: analyze all images
+            onAnalyzeAll: () async {
+              await _analyzeImagesFromPreview(
+                hill: hill,
+                hillImages: hillImages,
+                indexes: List<int>.generate(hillImages.length, (i) => i),
+              );
             },
           ),
         );
       },
     );
+  }
+
+  Future<void> _analyzeImagesFromPreview({
+    required Hill hill,
+    required List<ImagePanicle> hillImages,
+    required List<int> indexes,
+  }) async {
+    if (indexes.isEmpty || hillImages.isEmpty) return;
+    final valid = indexes
+        .where((index) => index >= 0 && index < hillImages.length)
+        .toSet();
+    if (valid.isEmpty) return;
+
+    _projectController.setActiveHillContext(
+      hillId: hill.id,
+      images: hillImages,
+    );
+
+    _projectController.selectedImages.clear();
+    for (final index in valid) {
+      _projectController.selectedImages.add(index);
+    }
+    _projectController.selectedImages.refresh();
+
+    await _projectController.startAnalysis();
+    await _refreshProject();
   }
 
   // ==================== CREATE HILL DIALOG ====================
@@ -286,35 +332,64 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   // ==================== ANALYSIS FAB ====================
   Widget _buildAnalysisFAB(int selectedCount, bool isAnalyzing) {
-    return FloatingActionButton.extended(
-      onPressed: isAnalyzing ? null : () => _projectController.startAnalysis(),
-      backgroundColor: const Color(0xFF4CAF50),
-      elevation: 8,
-      icon: const Icon(Icons.science_rounded, color: Colors.white),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (isAnalyzing)
-            const SizedBox(
-              width: 16,
-              height: 16,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+    final processed = _projectController.analysisProcessedCount;
+    final total = _projectController.analysisTotalCount;
+    final progressLabel = total > 0
+        ? 'Đang phân tích $processed/$total'
+        : 'Đang phân tích...';
+
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        FloatingActionButton.extended(
+          onPressed: isAnalyzing
+              ? null
+              : () => _projectController.startAnalysis(),
+          backgroundColor: const Color(0xFF4CAF50),
+          elevation: 8,
+          icon: const Icon(Icons.science_rounded, color: Colors.white),
+          label: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isAnalyzing)
+                const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                ),
+              if (isAnalyzing) const SizedBox(width: 8),
+              Text(
+                isAnalyzing ? progressLabel : 'Analyze ($selectedCount)',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (isAnalyzing) const SizedBox(height: 8),
+        if (isAnalyzing)
+          TextButton.icon(
+            onPressed: () => _projectController.cancelAnalysis(),
+            icon: const Icon(Icons.close_rounded, color: Colors.red),
+            label: const Text(
+              'Hủy phân tích',
+              style: TextStyle(color: Colors.red),
+            ),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(24),
+                side: const BorderSide(color: Colors.red),
               ),
             ),
-          if (isAnalyzing) const SizedBox(width: 8),
-          Text(
-            isAnalyzing
-                ? 'Đang phân tích...'
-                : 'Analyze ($selectedCount)',
-            style: const TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
           ),
-        ],
-      ),
+      ],
     );
   }
 
@@ -327,9 +402,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
       onProjectInfo: () => _showProjectInfo(context),
       onShare: () => _shareProject(context),
       onEdit: () async {
-        final result = await Get.to(
-          () => EditProjectScreen(project: _project),
-        );
+        final result = await Get.to(() => EditProjectScreen(project: _project));
         if (result == true) {
           await _refreshProject();
         }
@@ -340,11 +413,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
 
   void _showProjectInfo(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    ProjectInfoSheet.show(
-      context: context,
-      project: _project,
-      isDark: isDark,
-    );
+    ProjectInfoSheet.show(context: context, project: _project, isDark: isDark);
   }
 
   // ==================== IMAGE PICKER & UPLOAD ====================
@@ -552,6 +621,120 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
     }
   }
 
+  Future<void> _promptRenameHill(Hill hill) async {
+      final dialogResult = await CreateHillDialog.show(
+        context,
+        title: 'Rename hill',
+        description: 'Update the name or note for this hill.',
+        confirmLabel: 'Rename hill',
+        initialLabel: hill.hillLabel,
+        initialNote: hill.notes ?? '',
+      );
+      if (dialogResult == null) return;
+      final newName = dialogResult.label.trim();
+      final newNote = dialogResult.note.trim();
+      if (newName.isEmpty) {
+        _showSnack('Hill name cannot be empty.');
+        return;
+      }
+      if (newName == hill.hillLabel && newNote == (hill.notes ?? '')) return;
+
+      final result = await _projectController.renameHill(
+        projectId: _project.id,
+        hillId: hill.id,
+        hillLabel: newName,
+        notes: newNote.isEmpty ? null : newNote,
+      );
+
+    if (result.success) {
+      await _refreshProject();
+      final index = _hills.indexWhere((element) => element.id == hill.id);
+      if (index >= 0) {
+        setState(() => _currentRegion = index);
+        _setActiveHillContext(index);
+      }
+      _showSnack('Hill renamed successfully.');
+    } else if (result.message.isNotEmpty) {
+      _showSnack(result.message);
+    }
+  }
+
+  Future<void> _confirmDeleteHill(Hill hill) async {
+    final confirmed = await Get.dialog<bool>(
+      AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.warning_rounded,
+                color: Colors.red,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text('Delete hill'),
+          ],
+        ),
+        content: Text(
+          'Are you sure you want to delete "${hill.hillLabel}"? '
+          'All images and results for this hill will also be removed. '
+          'This action cannot be undone.',
+          style: const TextStyle(fontSize: 15),
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Get.back(result: true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Get.back(result: false),
+            child: Text(
+              'Cancel',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final result = await _projectController.deleteHill(
+      projectId: _project.id,
+      hillId: hill.id,
+    );
+
+    if (result.success) {
+      _projectController.selectedImages.clear();
+      await _refreshProject();
+      if (_hills.isNotEmpty) {
+        final nextIndex = _currentRegion.clamp(0, _hills.length - 1).toInt();
+        setState(() => _currentRegion = nextIndex);
+        _setActiveHillContext(nextIndex);
+      } else {
+        setState(() => _currentRegion = 0);
+      }
+      _showSnack('Hill deleted successfully.');
+    } else if (result.message.isNotEmpty) {
+      _showSnack(result.message);
+    }
+  }
+
   void _showDeleteConfirmation(BuildContext context) {
     Get.dialog(
       AlertDialog(
@@ -571,7 +754,7 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
               ),
             ),
             const SizedBox(width: 12),
-            const Text('Delete Project'),
+            const Text('Delete project'),
           ],
         ),
         content: const Text(
@@ -579,10 +762,6 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
           style: TextStyle(fontSize: 15),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
-          ),
           ElevatedButton(
             onPressed: () async {
               Get.back();
@@ -598,6 +777,10 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
             ),
             child: const Text('Delete', style: TextStyle(color: Colors.white)),
           ),
+          TextButton(
+            onPressed: () => Get.back(),
+            child: Text('Cancel', style: TextStyle(color: Colors.grey[600])),
+          ),
         ],
       ),
     );
@@ -606,7 +789,8 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen>
   Future<void> _shareProject(BuildContext context) async {
     final box = context.findRenderObject() as RenderBox?;
     final projectLink = 'https://yourapp.com/project/${_project.id}';
-    final shareMessage = '''
+    final shareMessage =
+        '''
 ${_project.projectName}
 
 ${_project.description}

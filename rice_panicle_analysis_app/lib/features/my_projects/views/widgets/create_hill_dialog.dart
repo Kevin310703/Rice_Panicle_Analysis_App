@@ -12,23 +12,56 @@ class HillDialogResult {
 }
 
 class CreateHillDialog extends StatefulWidget {
-  const CreateHillDialog({super.key});
+  final String title;
+  final String description;
+  final String confirmLabel;
+  final String initialLabel;
+  final String initialNote;
+
+  const CreateHillDialog({
+    super.key,
+    this.title = 'Create new hill',
+    this.description = 'Enter a name for your new hill',
+    this.confirmLabel = 'Create hill',
+    this.initialLabel = '',
+    this.initialNote = '',
+  });
 
   @override
   State<CreateHillDialog> createState() => _CreateHillDialogState();
 
-  static Future<HillDialogResult?> show(BuildContext context) {
+  static Future<HillDialogResult?> show(
+    BuildContext context, {
+    String title = 'Create new hill',
+    String description = 'Enter a name for your new hill',
+    String confirmLabel = 'Create hill',
+    String initialLabel = '',
+    String initialNote = '',
+  }) {
     return showDialog<HillDialogResult>(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const CreateHillDialog(),
+      builder: (context) => CreateHillDialog(
+        title: title,
+        description: description,
+        confirmLabel: confirmLabel,
+        initialLabel: initialLabel,
+        initialNote: initialNote,
+      ),
     );
   }
 }
 
 class _CreateHillDialogState extends State<CreateHillDialog> {
-  final TextEditingController _labelController = TextEditingController();
-  final TextEditingController _noteController = TextEditingController();
+  late final TextEditingController _labelController;
+  late final TextEditingController _noteController;
+
+  @override
+  void initState() {
+    _labelController = TextEditingController(text: widget.initialLabel);
+    _noteController = TextEditingController(text: widget.initialNote);
+    super.initState();
+  }
 
   @override
   void dispose() {
@@ -58,22 +91,22 @@ class _CreateHillDialogState extends State<CreateHillDialog> {
             // Header
             Row(
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF4CAF50).withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.create_new_folder_rounded,
-                    color: Color(0xFF4CAF50),
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 16),
+                // Container(
+                //   padding: const EdgeInsets.all(12),
+                //   decoration: BoxDecoration(
+                //     color: const Color(0xFF4CAF50).withOpacity(0.15),
+                //     borderRadius: BorderRadius.circular(12),
+                //   ),
+                //   child: const Icon(
+                //     Icons.create_new_folder_rounded,
+                //     color: Color(0xFF4CAF50),
+                //     size: 28,
+                //   ),
+                // ),
+                // const SizedBox(width: 16),
                 Expanded(
                   child: Text(
-                    'Create new hill',
+                    widget.title,
                     style: TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.bold,
@@ -82,29 +115,29 @@ class _CreateHillDialogState extends State<CreateHillDialog> {
                     ),
                   ),
                 ),
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 20,
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
-                    ),
-                  ),
-                  splashRadius: 20,
-                ),
+                // IconButton(
+                //   onPressed: () => Navigator.pop(context),
+                //   icon: Container(
+                //     padding: const EdgeInsets.all(4),
+                //     decoration: BoxDecoration(
+                //       color: Colors.grey.withOpacity(0.1),
+                //       shape: BoxShape.circle,
+                //     ),
+                //     child: Icon(
+                //       Icons.close_rounded,
+                //       size: 20,
+                //       color: isDark ? Colors.grey[400] : Colors.grey[600],
+                //     ),
+                //   ),
+                //   splashRadius: 20,
+                // ),
               ],
             ),
             const SizedBox(height: 24),
 
             // Description
             Text(
-              'Enter a name for your new hill',
+              widget.description,
               style: TextStyle(
                 fontSize: 14,
                 color: isDark ? Colors.grey[400] : Colors.grey[600],
@@ -136,7 +169,7 @@ class _CreateHillDialogState extends State<CreateHillDialog> {
                   onPressed: () => Navigator.pop(context),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
+                      horizontal: 20,
                       vertical: 14,
                     ),
                     shape: RoundedRectangleBorder(
@@ -167,8 +200,8 @@ class _CreateHillDialogState extends State<CreateHillDialog> {
                     backgroundColor: const Color(0xFF4CAF50),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 28,
-                      vertical: 24,
+                      horizontal: 20,
+                      vertical: 20,
                     ),
                     elevation: 2,
                     shadowColor: const Color(0xFF4CAF50).withOpacity(0.4),
@@ -176,9 +209,9 @@ class _CreateHillDialogState extends State<CreateHillDialog> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: const Text(
-                    'Create hill',
-                    style: TextStyle(
+                  child: Text(
+                    widget.confirmLabel,
+                    style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),

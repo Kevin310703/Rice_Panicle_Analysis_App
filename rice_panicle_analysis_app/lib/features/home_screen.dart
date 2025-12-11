@@ -1,83 +1,7 @@
-// import 'package:flutter/material.dart';
-// import 'package:get/get.dart';
-// import 'package:get/get_state_manager/get_state_manager.dart';
-// import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
-// import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
-// import 'package:rice_panicle_analysis_app/features/notifications/views/notifications_screen.dart';
-// import 'package:rice_panicle_analysis_app/features/widgets/custom_search_bar.dart';
-
-// class HomeScreen extends StatelessWidget {
-//   const HomeScreen({super.key});
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Scaffold(
-//       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-//       body: SafeArea(
-//         child: Column(
-//           children: [
-//             // Header section
-//             Padding(
-//               padding: const EdgeInsets.all(16.0),
-//               child: Row(
-//                 children: [
-//                   CircleAvatar(
-//                     radius: 20,
-//                     backgroundImage: AssetImage('assets/images/avatar.png'),
-//                   ),
-//                   SizedBox(width: 12),
-//                   Expanded(child: GetX<AuthController>(builder: (authController) => Column(
-//                     crossAxisAlignment: CrossAxisAlignment.start,
-//                     children: [
-//                       Text(
-//                         'Hello, ${authController.userName ?? 'User'}',
-//                         style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-//                       ),
-//                       Text(
-//                         'Good Morning',
-//                         style: TextStyle(
-//                           fontSize: 16,
-//                           fontWeight: FontWeight.bold,
-//                         ),
-//                       ),
-//                     ],
-//                   ),)),
-
-//                   Spacer(),
-//                   // Notification icon
-//                   IconButton(
-//                     icon: Icon(Icons.notifications_outlined),
-//                     onPressed: () => Get.to(() => NotificationsScreen()),
-//                   ),
-//                   // Theme toggle icon
-//                   GetBuilder<ThemeController>(
-//                     builder: (controller) => IconButton(
-//                       icon: Icon(
-//                         controller.isDarkMode
-//                             ? Icons.light_mode
-//                             : Icons.dark_mode,
-//                       ),
-//                       onPressed: () {
-//                         controller.toggleTheme();
-//                       },
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-
-//             // Search bar
-//             const CustomSearchBar(),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
+import 'package:rice_panicle_analysis_app/controllers/navigation_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
@@ -122,12 +46,6 @@ class _HomeScreenState extends State<HomeScreen> {
             // Search Bar
             SliverToBoxAdapter(child: _buildSearchBar(context, isDark)),
 
-            // Quick Stats
-            // SliverToBoxAdapter(child: _buildQuickStats(context, isDark)),
-
-            // Quick Actions
-            // SliverToBoxAdapter(child: _buildQuickActions(context, isDark)),
-
             // Recent Projects Section
             SliverToBoxAdapter(
               child: Padding(
@@ -144,8 +62,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     TextButton(
                       onPressed: () {
-                        // Switch to projects tab
-                        final navController = Get.find();
+                        final navController =
+                            Get.find<NavigationController>();
                         navController.changeIndex(1);
                       },
                       child: Text(
@@ -183,10 +101,7 @@ class _HomeScreenState extends State<HomeScreen> {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [
-                Theme.of(context).primaryColor.withOpacity(0.1),
-                Theme.of(context).scaffoldBackgroundColor,
-              ],
+              colors: [Color(0xFF4CAF50), Color(0xFF66BB6A), Color(0xFF81C784)],
             ),
           ),
           child: Row(
@@ -216,12 +131,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             backgroundColor: Theme.of(context).cardColor,
                             child: ClipOval(
                               child: Image(
-                                image: authController.userProfileImageUrl != null &&
-                                        authController.userProfileImageUrl!.startsWith('http')
-                                    ? NetworkImage(authController.userProfileImageUrl!)
+                                image:
+                                    authController.userProfileImageUrl !=
+                                            null &&
+                                        authController.userProfileImageUrl!
+                                            .startsWith('http')
+                                    ? NetworkImage(
+                                        authController.userProfileImageUrl!,
+                                      )
                                     : AssetImage(
-                                        authController.userProfileImageUrl ?? 'assets/images/avatar.png',
-                                      ) as ImageProvider,
+                                            authController
+                                                    .userProfileImageUrl ??
+                                                'assets/images/avatar.png',
+                                          )
+                                          as ImageProvider,
                                 fit: BoxFit.contain,
                                 width: 40,
                                 height: 40,
@@ -236,9 +159,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 greeting,
                                 style: AppTextStyle.withColor(
                                   AppTextStyle.bodyMedium,
-                                  isDark
-                                      ? Colors.grey[400]!
-                                      : Colors.grey[600]!,
+                                  Colors.white,
                                 ),
                               ),
                               // const SizedBox(height: 1),
@@ -370,191 +291,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuickStats(BuildContext context, bool isDark) {
-    return GetBuilder<ProjectController>(
-      builder: (projectController) {
-        final allProjects = projectController.allProjects;
-        final activeProjects = allProjects
-            .where((p) => p.status == ProjectStatus.active)
-            .length;
-        final completedProjects = allProjects
-            .where((p) => p.status == ProjectStatus.completed)
-            .length;
-        final totalImages = allProjects.fold<int>(
-          0,
-          (sum, project) => sum + project.images.length,
-        );
-        final totalAnalyses = allProjects.fold<int>(
-          0,
-          (sum, project) => sum + project.analyses.length,
-        );
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  Icons.folder_outlined,
-                  '$activeProjects',
-                  'Active',
-                  Colors.blue,
-                  isDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  Icons.check_circle_outline,
-                  '$completedProjects',
-                  'Completed',
-                  Colors.green,
-                  isDark,
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildStatCard(
-    BuildContext context,
-    IconData icon,
-    String value,
-    String label,
-    Color color,
-    bool isDark,
-  ) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 24),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            value,
-            style: AppTextStyle.withColor(
-              AppTextStyle.h2,
-              Theme.of(context).textTheme.bodyLarge!.color!,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: AppTextStyle.withColor(
-              AppTextStyle.bodySmall,
-              isDark ? Colors.grey[400]! : Colors.grey[600]!,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildQuickActions(BuildContext context, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Quick Actions',
-            style: AppTextStyle.withColor(
-              AppTextStyle.h3,
-              Theme.of(context).textTheme.bodyLarge!.color!,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionCard(
-                  context,
-                  'New Project',
-                  Icons.add_circle_outline,
-                  Theme.of(context).primaryColor,
-                  () => _openCreateProject(),
-                  isDark,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildActionCard(
-                  context,
-                  'Analyze',
-                  Icons.analytics_outlined,
-                  Colors.orange,
-                  () {
-                    // TODO: Navigate to analyze screen
-                  },
-                  isDark,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionCard(
-    BuildContext context,
-    String label,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-    bool isDark,
-  ) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 32),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: AppTextStyle.withColor(AppTextStyle.bodyMedium, color),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _buildRecentProjects(BuildContext context, bool isDark) {
     return GetBuilder<ProjectController>(
       builder: (projectController) {
@@ -610,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
           BoxShadow(
             color: isDark
                 ? Colors.black.withOpacity(0.3)
-                : Colors.grey.withOpacity(0.1),
+                : Colors.grey.withOpacity(0.4),
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -924,10 +660,11 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 }
-  Future<void> _openCreateProject() async {
-    final result = await Get.to(() => const CreateProjectScreen());
-    if (result == true) {
-      final projectController = Get.find<ProjectController>();
-      await projectController.loadProjects();
-    }
+
+Future<void> _openCreateProject() async {
+  final result = await Get.to(() => const CreateProjectScreen());
+  if (result == true) {
+    final projectController = Get.find<ProjectController>();
+    await projectController.loadProjects();
   }
+}

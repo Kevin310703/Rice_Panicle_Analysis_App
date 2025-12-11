@@ -1,8 +1,13 @@
-﻿import 'package:flutter/material.dart';
+﻿import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/image_panicle.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/analysis_result.dart';
+import 'package:rice_panicle_analysis_app/services/project_export_service.dart';
 
 class ProjectStatisticsScreen extends StatelessWidget {
   final Project project;
@@ -36,6 +41,8 @@ class ProjectStatisticsScreen extends StatelessWidget {
                 stats.totalRegions,
                 stats.avgSeeds,
                 stats.analyzedRegions,
+                stats.avgGrainsPerPanicle,
+                stats.avgPaniclesPerHill,
               ),
             ),
 
@@ -51,7 +58,7 @@ class ProjectStatisticsScreen extends StatelessWidget {
 
             // Bảng chi tiết
             SliverToBoxAdapter(
-              child: _buildDetailTable(isDark, stats.regionDetails),
+              child: _buildDetailTable(context, isDark, stats.regionDetails),
             ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 24)),
@@ -164,6 +171,8 @@ class ProjectStatisticsScreen extends StatelessWidget {
     int totalRegions,
     int avgSeeds,
     int analyzedCount,
+    double avgGrainsPerPanicle,
+    double avgPaniclesPerHill,
   ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -209,9 +218,33 @@ class ProjectStatisticsScreen extends StatelessWidget {
                 child: _buildStatCard(
                   isDark,
                   icon: Icons.show_chart_rounded,
-                  label: "Avg per Hill",
+                  label: "Grains / Hill",
                   value: avgSeeds.toString(),
                   color: const Color(0xFFFF9800),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildStatCard(
+                  isDark,
+                  icon: Icons.spa_rounded,
+                  label: "Grains / Panicle",
+                  value: _formatMetric(avgGrainsPerPanicle),
+                  color: const Color(0xFF26A69A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  isDark,
+                  icon: Icons.grass_rounded,
+                  label: "Panicles / Hill",
+                  value: _formatMetric(avgPaniclesPerHill),
+                  color: const Color(0xFFEF6C00),
                 ),
               ),
               const SizedBox(width: 12),
@@ -489,15 +522,225 @@ class ProjectStatisticsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildDetailTable(bool isDark, List<_RegionDetail> rows) {
+  Widget _buildDetailTable(
+    BuildContext context,
+    bool isDark,
+    List<_RegionDetail> rows,
+  ) {
     return _SectionCard(
       title: "Detailed breakdown",
       icon: Icons.table_chart_rounded,
       iconColor: const Color(0xFF9C27B0),
-      child: rows.isEmpty
-          ? const _EmptyDataMessage(message: 'No detailed data available.')
-          : _EnhancedRegionDataTable(isDark: isDark, rows: rows),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          rows.isEmpty
+              ? const _EmptyDataMessage(message: 'No detailed data available.')
+              : _EnhancedRegionDataTable(isDark: isDark, rows: rows),
+          const SizedBox(height: 16),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton.icon(
+              onPressed: rows.isEmpty
+                  ? null
+                  : () => _showExportDialog(context, rows),
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('Download result'),
+            ),
+          ),
+        ],
+      ),
     );
+  }
+
+  void _showExportDialog(BuildContext context, List<_RegionDetail> rows) {
+    final exportable = rows
+        .where((detail) => detail.hillId != null && detail.numImages > 0)
+        .toList();
+    if (exportable.isEmpty) {
+      Get.snackbar(
+        'Download',
+        'No analyzed hills available for download.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final selected = exportable.map((detail) => detail.hillId!).toSet();
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final allSelected = selected.length == exportable.length;
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.download_rounded),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Export results',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                    ],
+                  ),
+                  CheckboxListTile(
+                    value: allSelected,
+                    onChanged: (value) {
+                      setModalState(() {
+                        if (value ?? false) {
+                          selected.addAll(exportable.map((e) => e.hillId!));
+                        } else {
+                          selected.clear();
+                        }
+                      });
+                    },
+                    title: const Text('Select all'),
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                  ...exportable.map(
+                    (detail) => CheckboxListTile(
+                      value: selected.contains(detail.hillId),
+                      onChanged: (value) {
+                        setModalState(() {
+                          if (value ?? false) {
+                            selected.add(detail.hillId!);
+                          } else {
+                            selected.remove(detail.hillId);
+                          }
+                        });
+                      },
+                      title: Text(detail.name),
+                      subtitle: Text(
+                        '${detail.analyzed}/${detail.numImages} analyzed',
+                      ),
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: selected.isEmpty
+                        ? null
+                        : () {
+                            Navigator.pop(context);
+                            _exportSelectedResults(
+                              selected.toList(),
+                              rows,
+                            );
+                          },
+                    icon: const Icon(Icons.download),
+                    label: const Text('Download'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _exportSelectedResults(
+    List<String> hillIds,
+    List<_RegionDetail> rows,
+  ) async {
+    final exportService = ProjectExportService.instance;
+    final metrics = rows
+        .where(
+          (detail) => detail.hillId != null && hillIds.contains(detail.hillId),
+        )
+        .map(
+          (detail) => ExportHillMetrics(
+            hillId: detail.hillId!,
+            name: detail.name,
+            totalGrains: detail.totalSeeds,
+            totalPanicles: detail.numImages,
+            analyzedPanicles: detail.analyzed,
+          ),
+        )
+        .toList();
+    if (metrics.isEmpty) {
+      Get.snackbar(
+        'Download',
+        'No analyzed hills available for download.',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      return;
+    }
+
+    final permission = await _ensureExportPermissions();
+    if (!permission.granted) {
+      final message = permission.permanentlyDenied
+          ? 'Bạn đã từ chối quyền lưu trữ/ảnh. Vui lòng mở phần Cài đặt và cấp lại quyền để tải kết quả.'
+          : 'Ứng dụng cần quyền lưu tệp và ảnh để lưu kết quả. Vui lòng chấp nhận yêu cầu quyền.';
+      Get.snackbar(
+        'Cần quyền truy cập',
+        message,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      if (permission.permanentlyDenied) {
+        await openAppSettings();
+      }
+      return;
+    }
+
+    Get.dialog(
+      const Center(child: CircularProgressIndicator()),
+      barrierDismissible: false,
+    );
+    try {
+      final result = await exportService.exportProjectResults(
+        project: project,
+        metrics: metrics,
+      );
+      Get.back();
+      Get.snackbar(
+        'Download complete',
+        'Files saved to ${result.directoryPath}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.back();
+      Get.snackbar(
+        'Download failed',
+        'Unable to export results. ${e.toString()}',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  Future<({bool granted, bool permanentlyDenied})>
+      _ensureExportPermissions() async {
+    if (kIsWeb) {
+      return (granted: true, permanentlyDenied: false);
+    }
+    if (Platform.isAndroid) {
+      final storage = await Permission.storage.request();
+      final photos = await Permission.photos.request();
+      final manage = await Permission.manageExternalStorage.request();
+      final granted =
+          storage.isGranted || photos.isGranted || manage.isGranted;
+      final permanentlyDenied = storage.isPermanentlyDenied ||
+          photos.isPermanentlyDenied ||
+          manage.isPermanentlyDenied;
+      return (granted: granted, permanentlyDenied: permanentlyDenied);
+    } else if (Platform.isIOS) {
+      final addOnly = await Permission.photosAddOnly.request();
+      if (addOnly.isGranted) {
+        return (granted: true, permanentlyDenied: false);
+      }
+      final photos = await Permission.photos.request();
+      return (
+        granted: photos.isGranted,
+        permanentlyDenied: photos.isPermanentlyDenied
+      );
+    }
+    return (granted: true, permanentlyDenied: false);
   }
 }
 
@@ -614,7 +857,7 @@ class _EnhancedRegionDataTable extends StatelessWidget {
                   ),
                   DataCell(
                     _ValueChip(
-                      r.avgPerPanicle.toString(),
+                      _formatMetric(r.avgPerPanicle),
                       isDark: isDark,
                       color: const Color(0xFF2196F3),
                     ),
@@ -811,6 +1054,10 @@ class _StatisticsData {
   final List<_RegionRow> regionRows;
   final List<_RegionDetail> regionDetails;
   final int maxSeeds;
+  final double avgGrainsPerPanicle;
+  final double avgPaniclesPerHill;
+  final int totalPanicles;
+  final int totalAnalyzedPanicles;
 
   const _StatisticsData({
     required this.totalSeeds,
@@ -820,6 +1067,10 @@ class _StatisticsData {
     required this.regionRows,
     required this.regionDetails,
     required this.maxSeeds,
+    required this.avgGrainsPerPanicle,
+    required this.avgPaniclesPerHill,
+    required this.totalPanicles,
+    required this.totalAnalyzedPanicles,
   });
 
   factory _StatisticsData.fromProject(Project project) {
@@ -857,6 +1108,8 @@ class _StatisticsData {
     int totalRegions = 0;
     int analyzedRegions = 0;
     int maxSeeds = 0;
+    int totalPanicles = 0;
+    int totalAnalyzedPanicles = 0;
 
     void addRegion(String key, String label, List<ImagePanicle> imgs) {
       final analyzedImages = <String>{};
@@ -881,17 +1134,19 @@ class _StatisticsData {
       );
       regionDetails.add(
         _RegionDetail(
+          hillId: key == '__unassigned__' ? null : key,
           name: label,
           numImages: imgs.length,
           analyzed: analyzedImages.length,
           totalSeeds: seeds,
-          avgPerPanicle: analyzedImages.isEmpty
-              ? 0
-              : (seeds / analyzedImages.length).round(),
+          avgPerPanicle:
+              analyzedImages.isEmpty ? 0 : seeds / analyzedImages.length,
         ),
       );
       totalSeeds += seeds;
       totalRegions += 1;
+      totalPanicles += imgs.length;
+      totalAnalyzedPanicles += analyzedImages.length;
       if (analyzedRate >= 0.5) analyzedRegions += 1;
       if (seeds > maxSeeds) maxSeeds = seeds;
     }
@@ -909,9 +1164,11 @@ class _StatisticsData {
       });
     }
 
-    final avgSeeds = totalRegions == 0
-        ? 0
-        : (totalSeeds / totalRegions).round();
+    final avgSeeds = totalRegions == 0 ? 0 : (totalSeeds / totalRegions).round();
+    final double avgGrainsPerPanicle =
+        totalAnalyzedPanicles == 0 ? 0 : totalSeeds / totalAnalyzedPanicles;
+    final double avgPaniclesPerHill =
+        totalRegions == 0 ? 0 : totalPanicles / totalRegions;
 
     return _StatisticsData(
       totalSeeds: totalSeeds,
@@ -921,6 +1178,10 @@ class _StatisticsData {
       regionRows: regionRows,
       regionDetails: regionDetails,
       maxSeeds: maxSeeds,
+      avgGrainsPerPanicle: avgGrainsPerPanicle,
+      avgPaniclesPerHill: avgPaniclesPerHill,
+      totalPanicles: totalPanicles,
+      totalAnalyzedPanicles: totalAnalyzedPanicles,
     );
   }
 }
@@ -961,7 +1222,7 @@ class _RegionDataTable extends StatelessWidget {
                 DataCell(Text("${r.numImages}", style: textStyle)),
                 DataCell(Text("${r.analyzed}", style: textStyle)),
                 DataCell(Text("${r.totalSeeds}", style: textStyle)),
-                DataCell(Text("${r.avgPerPanicle}", style: textStyle)),
+                DataCell(Text(_formatMetric(r.avgPerPanicle), style: textStyle)),
               ],
             );
           }).toList(),
@@ -983,12 +1244,14 @@ class _RegionRow {
 }
 
 class _RegionDetail {
+  final String? hillId;
   final String name;
   final int numImages;
   final int analyzed;
   final int totalSeeds;
-  final int avgPerPanicle;
+  final double avgPerPanicle;
   _RegionDetail({
+    required this.hillId,
     required this.name,
     required this.numImages,
     required this.analyzed,
@@ -996,3 +1259,13 @@ class _RegionDetail {
     required this.avgPerPanicle,
   });
 }
+
+String _formatMetric(num value) {
+  final doubleVal = value.toDouble();
+  if (doubleVal == 0) return '0';
+  if (doubleVal == doubleVal.roundToDouble()) {
+    return doubleVal.toStringAsFixed(0);
+  }
+  return doubleVal.toStringAsFixed(1);
+}
+

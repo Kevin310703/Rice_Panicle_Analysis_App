@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/features/main_screen.dart';
 import 'package:rice_panicle_analysis_app/features/onboarding_screen.dart';
+import 'package:rice_panicle_analysis_app/features/reset_password_screen.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -39,29 +40,10 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Theme.of(context).primaryColor,
-              Theme.of(context).primaryColor.withOpacity(0.8),
-              Theme.of(context).primaryColor.withOpacity(0.6),
-            ],
-          ),
-        ),
+        color: Colors.white,
 
         child: Stack(
           children: [
-            // Background pattern
-            // Positioned.fill(
-            //   child: Opacity(
-            //     opacity: 0.5,
-            //     child: GridPattern(color: Colors.white),
-            //   ),
-            // ),
-
-            // Main content
             Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -87,10 +69,11 @@ class _SplashScreenState extends State<SplashScreen> {
                               ),
                             ],
                           ),
-                          child: Icon(
-                            Icons.rice_bowl,
-                            color: Theme.of(context).primaryColor,
-                            size: 48,
+                          child: Image.asset(
+                            'assets/images/logo.png',
+                            width: 84,
+                            height: 84,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       );
@@ -116,18 +99,12 @@ class _SplashScreenState extends State<SplashScreen> {
                         Text(
                           'GrainCount AI',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: Colors.black87,
                             fontSize: 32,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 4,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        // Text(
-                        //   'Analyzing rice panicles made easy',
-                        //   style: Theme.of(context).textTheme.bodyMedium
-                        //       ?.copyWith(color: Colors.white70, fontSize: 16),
-                        // ),
                       ],
                     ),
                   ),
@@ -150,9 +127,9 @@ class _SplashScreenState extends State<SplashScreen> {
                   'Empowering Farmers, Enhancing Yields',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: Colors.white70,
+                    color: const Color.fromARGB(137, 0, 0, 0),
                     fontSize: 14,
-                    fontWeight: FontWeight.w400,
+                    fontWeight: FontWeight.w600,
                     letterSpacing: 2,
                   ),
                 ),

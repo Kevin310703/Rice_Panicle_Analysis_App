@@ -24,10 +24,10 @@ class CustomBottomNavbar extends StatelessWidget {
             icon: Icon(Icons.folder_outlined),
             label: 'Project',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bookmark_add_outlined),
-            label: 'Bookmark',
-          ),
+          // BottomNavigationBarItem(
+          //   icon: Icon(Icons.bookmark_add_outlined),
+          //   label: 'Bookmark',
+          // ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: 'Account',

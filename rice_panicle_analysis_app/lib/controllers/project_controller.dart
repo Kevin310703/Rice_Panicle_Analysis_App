@@ -1,5 +1,7 @@
+import 'dart:async';
+import 'dart:collection';
+
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
@@ -7,10 +9,13 @@ import 'package:rice_panicle_analysis_app/features/my_projects/models/analysis_r
 import 'package:rice_panicle_analysis_app/features/my_projects/models/image_panicle.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/models/project.dart';
 import 'package:rice_panicle_analysis_app/features/my_projects/helper/project_helper.dart';
+import 'package:rice_panicle_analysis_app/features/notifications/models/notification.dart';
 import 'package:rice_panicle_analysis_app/services/local_panicle_storage_service.dart';
+import 'package:rice_panicle_analysis_app/services/notification_supabase_service.dart';
 import 'package:rice_panicle_analysis_app/services/panicle_ai_service.dart';
 import 'package:rice_panicle_analysis_app/services/panicle_analysis_result_service.dart';
 import 'package:rice_panicle_analysis_app/services/project_supabase_service.dart';
+import 'package:rice_panicle_analysis_app/services/supabase_auth_service.dart';
 
 class ProjectController extends GetxController {
   final RxList<Project> _allProjects = <Project>[].obs;
@@ -24,6 +29,10 @@ class ProjectController extends GetxController {
   final RxString _searchQuery = ''.obs;
   final RxBool _isAnalyzing = false.obs;
   final RxString _processingImageId = ''.obs;
+  final RxInt _analysisTotalCount = 0.obs;
+  final RxInt _analysisProcessedCount = 0.obs;
+  final RxBool _isCancelRequested = false.obs;
+  Completer<void>? _analysisCancelToken;
   Worker? _authUserWorker;
   Worker? _profileWorker;
 
@@ -44,6 +53,14 @@ class ProjectController extends GetxController {
   String get searchQuery => _searchQuery.value;
   bool get isAnalyzing => _isAnalyzing.value;
   String get processingImageId => _processingImageId.value;
+  int get analysisTotalCount => _analysisTotalCount.value;
+  int get analysisProcessedCount => _analysisProcessedCount.value;
+  double get analysisProgress => _analysisTotalCount.value == 0
+      ? 0
+      : _analysisProcessedCount.value / _analysisTotalCount.value;
+  Project? get activeProject => _project.value;
+  Rx<Project?> get projectChanges => _project;
+  bool get isCancelRequested => _isCancelRequested.value;
 
   String? get projectName => _project.value?.projectName;
   String? get projectDescription => _project.value?.description;
@@ -83,6 +100,7 @@ class ProjectController extends GetxController {
         } else if (!authController.isLoggedIn) {
           _allProjects.value = [];
           _filteredProjects.value = [];
+          update();
         }
       },
     );
@@ -93,6 +111,7 @@ class ProjectController extends GetxController {
         if (user == null) {
           _allProjects.value = [];
           _filteredProjects.value = [];
+          update();
         }
       },
     );
@@ -117,46 +136,94 @@ class ProjectController extends GetxController {
       Get.snackbar('Analysis', 'No images available in this region.');
       return;
     }
-    final project = _project.value;
-    if (project == null) {
+    await _syncActiveProjectState(silent: true);
+    final currentProject = _project.value;
+    if (currentProject == null) {
       Get.snackbar('Analysis', 'Project context not found.');
       return;
     }
+    var project = currentProject;
+    final previousStatus = project.status;
+    project = await _updateProjectStatus(
+          project,
+          ProjectStatus.inProgress,
+          silent: true,
+        ) ??
+        project;
 
+    _analysisTotalCount.value = selectedImages.length;
+    _analysisProcessedCount.value = 0;
+    _isCancelRequested.value = false;
+    _analysisCancelToken = Completer<void>();
     _isAnalyzing.value = true;
+
+    var analysisSuccessful = false;
+
     try {
       final hillLabel = _activeHillId == null ? '' : ' at hill $_activeHillId';
       final processingMessage =
           'Processing ${selectedImages.length} images$hillLabel...';
       Get.snackbar('Analysis', processingMessage);
       final analyzer = PanicleAiService.instance;
-      final indexes = selectedImages.toList()..sort();
-      final results = <PanicleInferenceResult>[];
+        final queue = Queue<int>()
+          ..addAll(selectedImages.toList()..sort());
+        final results = <PanicleInferenceResult>[];
+        var processed = 0;
 
-      for (final index in indexes) {
-        if (index < 0 || index >= _currentHillImages.length) continue;
-        final panicle = _currentHillImages[index];
+        while (queue.isNotEmpty) {
+          final index = queue.removeFirst();
+          if (index < 0 || index >= _currentHillImages.length) continue;
+          final panicle = _currentHillImages[index];
         if (panicle.imagePath.isEmpty) continue;
+        if (_isCancelRequested.value) {
+          debugPrint('Analysis canceled before processing image $index');
+          break;
+        }
         try {
           _processingImageId.value = panicle.id;
-          final inference = await analyzer.analyzeRemoteImage(
+          debugPrint(
+            'Analyzing image ${panicle.id} '
+            '[${processed + 1}/${_analysisTotalCount.value}]',
+          );
+          project = _project.value ?? project;
+          final inference = await _runCancelableInference(
+            analyzer,
             panicle.imagePath,
           );
+          if (inference == null) {
+            throw const _AnalysisCanceledException();
+          }
           await _analysisResultService.persistResult(
             project: project,
             panicle: panicle,
             inference: inference,
           );
           results.add(inference);
+          debugPrint('Completed analysis for ${panicle.id}');
         } catch (err, stack) {
           debugPrint('Error analyzing image ${panicle.id}: $err\n$stack');
+        } finally {
+          processed += 1;
+          if (_analysisTotalCount.value > 0) {
+            _analysisProcessedCount.value = processed >
+                    _analysisTotalCount.value
+                ? _analysisTotalCount.value
+                : processed;
+          }
+          await _syncActiveProjectState(silent: true);
+          project = _project.value ?? project;
         }
+      }
+
+      if (_isCancelRequested.value) {
+        throw const _AnalysisCanceledException();
       }
 
       if (results.isEmpty) {
         Get.snackbar('Analysis', 'Unable to analyze the selected images.');
         return;
       }
+      analysisSuccessful = true;
 
       selectedImages.clear();
       final summary = _buildSummary(results);
@@ -170,6 +237,11 @@ class ProjectController extends GetxController {
       if (refreshed != null) {
         _project.value = refreshed;
       }
+    } on _AnalysisCanceledException {
+      Get.snackbar(
+        'Analysis canceled',
+        'The current analysis has been canceled.',
+      );
     } catch (e, stack) {
       debugPrint('Error analyzing images: $e\n$stack');
       Get.snackbar(
@@ -179,6 +251,31 @@ class ProjectController extends GetxController {
     } finally {
       _processingImageId.value = '';
       _isAnalyzing.value = false;
+      _analysisTotalCount.value = 0;
+      _analysisProcessedCount.value = 0;
+      if (_analysisCancelToken != null &&
+          !(_analysisCancelToken!.isCompleted)) {
+        _analysisCancelToken!.complete();
+      }
+      _analysisCancelToken = null;
+      _isCancelRequested.value = false;
+      final latest = _project.value ?? project;
+      if (analysisSuccessful) {
+        await _updateProjectStatus(
+          latest,
+          ProjectStatus.completed,
+          silent: true,
+          force: true,
+        );
+      } else if (previousStatus != ProjectStatus.inProgress) {
+        await _updateProjectStatus(
+          latest,
+          previousStatus,
+          silent: true,
+          force: true,
+        );
+      }
+      await _syncActiveProjectState();
     }
   }
 
@@ -190,11 +287,123 @@ class ProjectController extends GetxController {
     _currentHillImages = List<ImagePanicle>.from(images);
   }
 
+  Future<void> syncActiveProject() async {
+    await _syncActiveProjectState();
+  }
+
+  void cancelAnalysis() {
+    if (_isAnalyzing.value && !_isCancelRequested.value) {
+      _isCancelRequested.value = true;
+      final token = _analysisCancelToken;
+      if (token != null && !token.isCompleted) {
+        token.complete();
+      }
+      Get.snackbar(
+        'Canceling analysis',
+        'Stopping after the current image...',
+      );
+    }
+  }
+
+  Future<void> _syncActiveProjectState({bool silent = false}) async {
+    final current = _project.value;
+    if (current == null) return;
+    final refreshed = await getProjectById(current.id);
+    if (refreshed != null) {
+      _project.value = refreshed;
+      _replaceProjectInCaches(refreshed);
+      if (!silent) {
+        update();
+      }
+    }
+  }
+
+  Future<Project?> _updateProjectStatus(
+    Project project,
+    ProjectStatus status, {
+    bool silent = true,
+    bool force = false,
+  }) async {
+    if (!force && project.status == status) return project;
+    final updated = project.copyWith(
+      status: status,
+      updatedAt: DateTime.now(),
+    );
+    try {
+      final result = await ProjectSupabaseService.updateProject(updated);
+      if (result.success && result.project != null) {
+        final refreshed = result.project!;
+        _project.value = refreshed;
+        _replaceProjectInCaches(refreshed);
+        if (!silent) update();
+        return refreshed;
+      }
+      if (!silent) {
+        final message = result.message.isNotEmpty
+            ? result.message
+            : 'Failed to update project status.';
+        Get.snackbar('Project', message);
+      }
+    } catch (e, stack) {
+      debugPrint('Failed to update project status: $e\n$stack');
+      if (!silent) {
+        Get.snackbar(
+          'Project',
+          'Failed to update project status. Please try again.',
+        );
+      }
+    }
+    _project.value = updated;
+    _replaceProjectInCaches(updated);
+    if (!silent) update();
+    return updated;
+  }
+
+  void _replaceProjectInCaches(Project updated) {
+    final indexAll = _allProjects.indexWhere((p) => p.id == updated.id);
+    if (indexAll >= 0) {
+      _allProjects[indexAll] = updated;
+      _allProjects.refresh();
+    }
+    final indexFiltered = _filteredProjects.indexWhere((p) => p.id == updated.id);
+    if (indexFiltered >= 0) {
+      _filteredProjects[indexFiltered] = updated;
+      _filteredProjects.refresh();
+    }
+  }
+
+  Future<PanicleInferenceResult?> _runCancelableInference(
+    PanicleAiService analyzer,
+    String imagePath,
+  ) async {
+    final inferenceFuture = analyzer.analyzeRemoteImage(imagePath);
+    final cancelToken = _analysisCancelToken;
+    if (cancelToken == null) {
+      return inferenceFuture;
+    }
+    final winner = await Future.any<PanicleInferenceResult?>(
+      <Future<PanicleInferenceResult?>>[
+        inferenceFuture,
+        cancelToken.future.then((_) => null),
+      ],
+    );
+    if (winner == null) {
+      _discardFuture(inferenceFuture);
+      return null;
+    }
+    return winner;
+  }
+
+  void _discardFuture<T>(Future<T> future) {
+    unawaited(future.then((_) {}, onError: (_, __) {}));
+  }
+
   // Load all projects from Supabase
   Future<void> loadProjects() async {
     _isLoading.value = true;
     _hasError.value = false;
     _errorMessage.value = '';
+    update();
 
     try {
       final authController = Get.find<AuthController>();
@@ -220,6 +429,7 @@ class ProjectController extends GetxController {
       _filteredProjects.value = [];
     } finally {
       _isLoading.value = false;
+      update();
     }
   }
 
@@ -270,7 +480,9 @@ class ProjectController extends GetxController {
     }
 
     _filteredProjects.value = filtered;
-    print('Total filtered projects: ${_filteredProjects.length}');
+    if (kDebugMode) {
+      print('Total filtered projects: ${_filteredProjects.length}');
+    }
   }
 
   Future<List<Project>> searchProjects(String searchTerm) async {
@@ -286,7 +498,9 @@ class ProjectController extends GetxController {
       );
       return await _enrichProjects(projects);
     } catch (e) {
-      print('Error searching projects: $e');
+      if (kDebugMode) {
+        print('Error searching projects: $e');
+      }
       return [];
     }
   }
@@ -353,6 +567,12 @@ class ProjectController extends GetxController {
       final result = await ProjectSupabaseService.createProject(
         enrichedProject,
       );
+      if (result.success) {
+        _pushProjectNotification(
+          title: 'Project created',
+          message: '${enrichedProject.projectName} has been created successfully.',
+        );
+      }
       await loadProjects();
       return result;
     } catch (e) {
@@ -369,6 +589,12 @@ class ProjectController extends GetxController {
     _isLoading.value = true;
     try {
       final result = await ProjectSupabaseService.updateProject(project);
+      if (result.success) {
+        _pushProjectNotification(
+          title: 'Project updated',
+          message: '${project.projectName} was updated.',
+        );
+      }
       await loadProjects();
       return result;
     } catch (e) {
@@ -384,12 +610,16 @@ class ProjectController extends GetxController {
   // Delete a project
   Future<ProjectResult> deleteProject(String projectId) async {
     _isLoading.value = true;
-    try {
-      final result = await ProjectSupabaseService.deleteProject(projectId);
-      if (result.success) {
-        await _localStorage.deleteProject(projectId);
-        await _analysisResultService.deleteProject(projectId);
-      }
+      try {
+        final result = await ProjectSupabaseService.deleteProject(projectId);
+        if (result.success) {
+          await _localStorage.deleteProject(projectId);
+          await _analysisResultService.deleteProject(projectId);
+          _pushProjectNotification(
+            title: 'Project deleted',
+            message: 'A project was removed from your workspace.',
+          );
+        }
       await loadProjects();
       return result;
     } catch (e) {
@@ -416,6 +646,92 @@ class ProjectController extends GetxController {
       );
       await loadProjects();
       return result;
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  Future<ProjectResult> renameHill({
+    required String projectId,
+    required String hillId,
+    required String hillLabel,
+    String? notes,
+  }) async {
+    _isLoading.value = true;
+    try {
+      final result = await ProjectSupabaseService.updateHill(
+        projectId: projectId,
+        hillId: hillId,
+        hillLabel: hillLabel,
+        notes: notes,
+      );
+      await loadProjects();
+      return result;
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  Future<ProjectResult> deleteHill({
+    required String projectId,
+    required String hillId,
+  }) async {
+    _isLoading.value = true;
+    try {
+      final result = await ProjectSupabaseService.deleteHill(
+        projectId: projectId,
+        hillId: hillId,
+      );
+      await loadProjects();
+      return result;
+    } finally {
+      _isLoading.value = false;
+    }
+  }
+
+  Future<ProjectResult> deleteProjectImage({
+    required String projectId,
+    required ImagePanicle image,
+  }) async {
+    _isLoading.value = true;
+    try {
+      final isLocal = image.id.startsWith('local_') ||
+          image.imagePath.startsWith('/') ||
+          image.imagePath.startsWith('file://');
+
+      if (isLocal) {
+        await _localStorage.deleteImage(
+          projectId: projectId,
+          image: image,
+        );
+      } else {
+        await ProjectSupabaseService.deleteImage(
+          imageId: image.id,
+          imagePath: image.imagePath,
+        );
+      }
+
+      await _analysisResultService.deleteResultsForImage(
+        projectId: projectId,
+        imageId: image.id,
+      );
+
+      selectedImages.clear();
+      final updatedProject = await getProjectById(projectId);
+      await loadProjects();
+      return ProjectResult(
+        success: true,
+        project: updatedProject,
+        message: 'Image deleted successfully.',
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error deleting image: $e');
+      }
+      return ProjectResult(
+        success: false,
+        message: 'Failed to delete image. Please try again.',
+      );
     } finally {
       _isLoading.value = false;
     }
@@ -584,6 +900,21 @@ class ProjectController extends GetxController {
           : base.modelVersion,
     );
   }
+
+  void _pushProjectNotification({
+    required String title,
+    required String message,
+    NotificationType type = NotificationType.project,
+  }) {
+    final userId = SupabaseAuthService.currentUser?.id;
+    if (userId == null) return;
+    unawaited(NotificationSupabaseService.createNotification(
+      userId: userId,
+      type: type,
+      title: title,
+      message: message,
+    ));
+  }
 }
 
 class _AnalysisSummary {
@@ -617,4 +948,8 @@ _AnalysisSummary _buildSummary(List<PanicleInferenceResult> results) {
     grain: grain,
     primaryBranch: primaryBranch,
   );
+}
+
+class _AnalysisCanceledException implements Exception {
+  const _AnalysisCanceledException();
 }

@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:get_storage/get_storage.dart';
@@ -43,8 +42,7 @@ class LocalAnalysisResultStorageService {
     records.removeWhere(
       (record) =>
           record.projectId == projectId &&
-          record.result.imageId == result.imageId &&
-          record.result.processedAt == result.processedAt,
+          record.result.imageId == result.imageId,
     );
     records.add(
       _LocalAnalysisRecord(
@@ -98,6 +96,27 @@ class LocalAnalysisResultStorageService {
     }
   }
 
+  Future<void> deleteResultsForImage({
+    required String projectId,
+    required String imageId,
+  }) async {
+    final remaining = _readRecords()
+        .where(
+          (record) =>
+              !(record.projectId == projectId &&
+                record.result.imageId == imageId),
+        )
+        .toList();
+    await _writeRecords(remaining);
+
+    if (kIsWeb) return;
+    final base = await _baseDirectory();
+    final imageDir = Directory(p.join(base.path, projectId, imageId));
+    if (await imageDir.exists()) {
+      await imageDir.delete(recursive: true);
+    }
+  }
+
   Future<Directory> _resultDirectory(
     String projectId,
     String imageId,
@@ -126,7 +145,7 @@ class LocalAnalysisResultStorageService {
         .whereType<Map>()
         .map(
           (raw) => _LocalAnalysisRecord.fromMap(
-            Map<String, dynamic>.from(raw as Map),
+            Map<String, dynamic>.from(raw),
           ),
         )
         .toList();

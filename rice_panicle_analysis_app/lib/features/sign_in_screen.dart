@@ -109,7 +109,7 @@ class _SigninScreenState extends State<SigninScreen> {
               // Sign in button
               SizedBox(
                 width: double.infinity,
-                height: 50,
+                height: 55,
                 child: ElevatedButton(
                   onPressed: _isLoading ? null : _handleSignIn,
                   style: ElevatedButton.styleFrom(

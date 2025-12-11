@@ -9,6 +9,8 @@ class RegionSelector extends StatefulWidget {
   final VoidCallback onAddRegion;
   final bool isDark;
   final ScrollController scrollController;
+  final ValueChanged<Hill>? onRenameHill;
+  final ValueChanged<Hill>? onDeleteHill;
 
   const RegionSelector({
     super.key,
@@ -18,6 +20,8 @@ class RegionSelector extends StatefulWidget {
     required this.onAddRegion,
     required this.isDark,
     required this.scrollController,
+    this.onRenameHill,
+    this.onDeleteHill,
   });
 
   @override
@@ -51,18 +55,22 @@ class _RegionSelectorState extends State<RegionSelector> {
               : 'Hill ${index + 1}';
           
           return _buildRegionCard(
-            index,
-            title,
-            isSelected,
+            hill: hill,
+            index: index,
+            title: title,
+            isSelected: isSelected,
           );
         },
       ),
     );
   }
 
-  Widget _buildRegionCard(int index, String title, bool isSelected) {
-    final bool isHover = _hoverRegion == index;
-    
+  Widget _buildRegionCard({
+    required Hill hill,
+    required int index,
+    required String title,
+    required bool isSelected,
+  }) {
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hoverRegion = index),
@@ -72,7 +80,7 @@ class _RegionSelectorState extends State<RegionSelector> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
           curve: Curves.easeInOut,
-          width: 100,
+          width: 120,
           margin: const EdgeInsets.only(right: 12),
           decoration: BoxDecoration(
             gradient: isSelected
@@ -108,19 +116,75 @@ class _RegionSelectorState extends State<RegionSelector> {
                     ),
                   ],
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
+          child: Stack(
             children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected
-                      ? Colors.white
-                      : (widget.isDark ? Colors.white : Colors.black87),
+              Center(
+                child: Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isSelected
+                        ? Colors.white
+                        : (widget.isDark ? Colors.white : Colors.black87),
+                  ),
                 ),
               ),
+              if (widget.onRenameHill != null || widget.onDeleteHill != null)
+                Positioned(
+                  top: 0,
+                  right: 4,
+                  child: PopupMenuButton<_RegionMenuAction>(
+                    tooltip: 'Manage hill',
+                    offset: const Offset(0, 46),
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 18,
+                      color: isSelected
+                          ? Colors.white
+                          : (widget.isDark ? Colors.white70 : Colors.black54),
+                    ),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _RegionMenuAction.rename:
+                          widget.onRenameHill?.call(hill);
+                          break;
+                        case _RegionMenuAction.delete:
+                          widget.onDeleteHill?.call(hill);
+                          break;
+                      }
+                    },
+                    itemBuilder: (context) {
+                      return [
+                        if (widget.onRenameHill != null)
+                          const PopupMenuItem<_RegionMenuAction>(
+                            value: _RegionMenuAction.rename,
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(Icons.edit_rounded, size: 18),
+                              title: Text('Rename'),
+                            ),
+                          ),
+                        if (widget.onDeleteHill != null)
+                          PopupMenuItem<_RegionMenuAction>(
+                            value: _RegionMenuAction.delete,
+                            child: ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              leading: Icon(
+                                Icons.delete_outline_rounded,
+                                color: Colors.red[600],
+                                size: 18,
+                              ),
+                              title: Text('Delete', style: TextStyle(color: Colors.red[600])),
+                            ),
+                          ),
+                    ];
+                  },
+                ),
+                ),
             ],
           ),
         ),
@@ -183,3 +247,5 @@ class _RegionSelectorState extends State<RegionSelector> {
     );
   }
 }
+
+enum _RegionMenuAction { rename, delete }

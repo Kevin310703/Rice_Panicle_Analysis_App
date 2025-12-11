@@ -120,6 +120,26 @@ class LocalPanicleStorageService {
     return dir;
   }
 
+  Future<void> deleteImage({
+    required String projectId,
+    required ImagePanicle image,
+  }) async {
+    final records = _readRecords()
+        .where((record) =>
+            !(record.projectId == projectId &&
+              record.panicle.id == image.id))
+        .toList();
+    await _writeRecords(records);
+
+    if (kIsWeb) return;
+    final path = _normalizeLocalPath(image.imagePath);
+    if (path.isEmpty) return;
+    final file = File(path);
+    if (await file.exists()) {
+      await file.delete();
+    }
+  }
+
   List<_LocalPanicleRecord> _readRecords() {
     final data = _box.read<List<dynamic>>(_storeKey);
     if (data == null) return <_LocalPanicleRecord>[];
@@ -127,7 +147,7 @@ class LocalPanicleStorageService {
         .whereType<Map>()
         .map(
           (raw) => _LocalPanicleRecord.fromMap(
-            Map<String, dynamic>.from(raw as Map),
+            Map<String, dynamic>.from(raw),
           ),
         )
         .toList();
@@ -140,6 +160,14 @@ class LocalPanicleStorageService {
 
   String _generateLocalId(DateTime timestamp, int index) {
     return 'local_${timestamp.microsecondsSinceEpoch}_$index';
+  }
+
+  String _normalizeLocalPath(String value) {
+    if (value.isEmpty) return '';
+    if (value.startsWith('file://')) {
+      return Uri.parse(value).toFilePath();
+    }
+    return value;
   }
 }
 

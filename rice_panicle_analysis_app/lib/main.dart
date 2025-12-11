@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:get/instance_manager.dart';
@@ -7,10 +9,12 @@ import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/navigation_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/project_controller.dart';
 import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
+import 'package:rice_panicle_analysis_app/features/reset_password_screen.dart';
 import 'package:rice_panicle_analysis_app/utils/app_themes.dart';
 import 'package:rice_panicle_analysis_app/features/splash_screen.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:rice_panicle_analysis_app/services/panicle_ai_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -30,6 +34,10 @@ void main() async {
   Get.put(AuthController());
   Get.put(NavigationController());
   Get.put(ProjectController());
+
+  // Warm up ONNX runtime so the first analysis is faster.
+  final panicleService = PanicleAiService.instance;
+  unawaited(panicleService.warmUp());
   
   runApp(const MyApp());
 }
@@ -64,6 +72,10 @@ class _MyAppState extends State<MyApp> {
         debugPrint('👋 User signed out');
         // Note: Navigation will be handled by your screens
       }
+      else if (event == AuthChangeEvent.passwordRecovery) {
+        debugPrint('Password recovery event received');
+        Get.offAll(() => const ResetPasswordScreen());
+      }
       else if (event == AuthChangeEvent.userUpdated) {
         debugPrint('🔄 User updated');
         
@@ -91,7 +103,7 @@ class _MyAppState extends State<MyApp> {
     final themeController = Get.find<ThemeController>();
     
     return GetMaterialApp(
-      title: 'Rice Panicle Analysis App',
+      title: 'GrainCount AI',
       theme: AppThemes.light,
       darkTheme: AppThemes.dark,
       themeMode: themeController.theme,

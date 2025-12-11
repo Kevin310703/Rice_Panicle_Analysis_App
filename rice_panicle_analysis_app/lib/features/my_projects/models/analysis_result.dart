@@ -11,6 +11,7 @@ class AnalysisResult {
   final String? boundingImageUrl;
   final String? localBoundingImagePath;
   final bool isSynced;
+  final double? processingTimeMs;
 
   const AnalysisResult({
     required this.id,
@@ -25,34 +26,37 @@ class AnalysisResult {
     this.boundingImageUrl,
     this.localBoundingImagePath,
     this.isSynced = true,
+    this.processingTimeMs,
   });
 
   factory AnalysisResult.fromMap(Map<String, dynamic> data) {
-    double _toDouble(dynamic value) {
+    double toDouble(dynamic value) {
       if (value == null) return 0;
       if (value is num) return value.toDouble();
       return double.tryParse(value.toString()) ?? 0;
     }
 
-    DateTime _parseDate(dynamic value) {
+    DateTime parseDate(dynamic value) {
       if (value is DateTime) return value;
       return DateTime.parse(value.toString());
     }
 
+    final rawProcessing = data['processing_time_ms'];
     return AnalysisResult(
       id: data['id']?.toString() ?? '',
       imageId: data['image_id']?.toString() ?? '',
       grains: data['grains'] as int? ?? 0,
       primaryBranch: data['primary_branch'] as int? ?? 0,
       totalSpikelets: data['total_spikelets'] as int? ?? 0,
-      filledRatio: _toDouble(data['filled_ratio']),
-      confidence: _toDouble(data['confidence']),
+      filledRatio: toDouble(data['filled_ratio']),
+      confidence: toDouble(data['confidence']),
       modelVersion: data['model_version'] as String? ?? 'unknown',
-      processedAt: _parseDate(data['processed_at']),
+      processedAt: parseDate(data['processed_at']),
       boundingImageUrl: data['bounding_image_url'] as String? ??
           data['bounding_image_path'] as String?,
       localBoundingImagePath: data['local_bounding_image_path'] as String?,
       isSynced: data['is_synced'] as bool? ?? true,
+      processingTimeMs: rawProcessing == null ? null : toDouble(rawProcessing),
     );
   }
 
@@ -92,6 +96,7 @@ class AnalysisResult {
       'bounding_image_url': boundingImageUrl,
       'local_bounding_image_path': localBoundingImagePath,
       'is_synced': isSynced,
+      'processing_time_ms': processingTimeMs,
     };
   }
 
@@ -108,6 +113,7 @@ class AnalysisResult {
     String? boundingImageUrl,
     String? localBoundingImagePath,
     bool? isSynced,
+    double? processingTimeMs,
   }) {
     return AnalysisResult(
       id: id ?? this.id,
@@ -123,6 +129,7 @@ class AnalysisResult {
       localBoundingImagePath:
           localBoundingImagePath ?? this.localBoundingImagePath,
       isSynced: isSynced ?? this.isSynced,
+      processingTimeMs: processingTimeMs ?? this.processingTimeMs,
     );
   }
 }

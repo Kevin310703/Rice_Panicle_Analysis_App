@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:rice_panicle_analysis_app/controllers/auth_controller.dart';
 import 'package:rice_panicle_analysis_app/features/sign_in_screen.dart';
+import 'package:rice_panicle_analysis_app/services/supabase_auth_service.dart';
 import 'package:rice_panicle_analysis_app/utils/app_text_style.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
@@ -15,8 +18,19 @@ class VerifyEmailScreen extends StatefulWidget {
 
 class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   bool _isResending = false;
-  bool _canResend = true;
-  int _cooldownSeconds = 0;
+  bool _isLinkActive = true;
+  bool _canResend = false;
+  int _cooldownSeconds = 60;
+  bool _isChecking = false;
+  late DateTime _expiryTime;
+  Timer? _expiryTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _expiryTime = DateTime.now().add(const Duration(seconds: 60));
+    _startLinkTimer();
+  }
 
   Future<void> _resendEmail() async {
     if (!_canResend || _isResending) return;
@@ -40,8 +54,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         colorText: Colors.white,
         snackPosition: SnackPosition.BOTTOM,
       );
-      
-      _startCooldown();
+
+      _startLinkTimer();
     } else {
       Get.snackbar(
         'Error',
@@ -53,30 +67,78 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
-  void _startCooldown() {
+  void _startLinkTimer() {
+    _expiryTimer?.cancel();
+    _expiryTime = DateTime.now().add(const Duration(seconds: 60));
+
     setState(() {
+      _isLinkActive = true;
       _canResend = false;
       _cooldownSeconds = 60;
     });
 
-    Future.doWhile(() async {
-      await Future.delayed(const Duration(seconds: 1));
-      
-      if (!mounted) return false;
-      
+    _expiryTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      final remaining = _expiryTime.difference(DateTime.now()).inSeconds;
       setState(() {
-        _cooldownSeconds--;
+        _cooldownSeconds = remaining.clamp(0, 60);
       });
 
-      if (_cooldownSeconds <= 0) {
+      if (remaining <= 0) {
+        timer.cancel();
+        if (!mounted) return;
         setState(() {
+          _isLinkActive = false;
           _canResend = true;
         });
-        return false;
       }
-      
-      return true;
     });
+  }
+
+  Future<void> _checkVerification() async {
+    if (_isChecking) return;
+    setState(() => _isChecking = true);
+
+    final verified = await SupabaseAuthService.isEmailVerified();
+
+    if (!mounted) return;
+    setState(() => _isChecking = false);
+
+    if (verified) {
+      Get.snackbar(
+        'Verified',
+        'Your email has been successfully verified',
+        backgroundColor: Colors.green,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+      Get.offAll(() => const SigninScreen());
+    } else if (!_isLinkActive) {
+      Get.snackbar(
+        'Link expired',
+        'Verification link is only valid for 60 seconds. Please resend the email to confirm.',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+      );
+    } else {
+      Get.snackbar(
+        'Not Verified Yet',
+        'Please click the link in the email and try again',
+        backgroundColor: Colors.orange,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _expiryTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -87,7 +149,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: false,
         title: Text(
-          'Xác nhận email',
+          'Verify email',
           style: AppTextStyle.withColor(
             AppTextStyle.h3,
             Theme.of(context).textTheme.bodyLarge!.color!,
@@ -100,7 +162,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             const SizedBox(height: 24),
-            
+
             // Email icon
             Container(
               padding: const EdgeInsets.all(20),
@@ -114,33 +176,33 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 color: Theme.of(context).primaryColor,
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Title
             Text(
-              'Hãy kiểm tra hộp thư của bạn',
+              'Check your inbox',
               textAlign: TextAlign.center,
               style: AppTextStyle.withColor(
                 AppTextStyle.h2,
                 Theme.of(context).textTheme.bodyLarge!.color!,
               ),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Description
             Text(
-              'Chúng tôi đã gửi liên kết xác nhận đến:',
+              'We have sent a verification link to:',
               textAlign: TextAlign.center,
               style: AppTextStyle.withColor(
                 AppTextStyle.bodyMedium,
                 isDark ? Colors.grey[400]! : Colors.grey[600]!,
               ),
             ),
-            
+
             const SizedBox(height: 8),
-            
+
             // Email address
             Text(
               widget.email,
@@ -150,27 +212,27 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 Theme.of(context).primaryColor,
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Instructions
             Text(
-              'Vui lòng nhấp vào liên kết trong email để kích hoạt tài khoản. Sau khi xác nhận, bạn có thể quay lại màn hình đăng nhập.',
+              'Please click the link in the email to activate your account. After verification, you can return to the sign-in screen.',
               textAlign: TextAlign.center,
               style: AppTextStyle.withColor(
                 AppTextStyle.bodyMedium,
                 isDark ? Colors.grey[400]! : Colors.grey[600]!,
               ),
             ),
-            
+
             const SizedBox(height: 32),
-            
+
             // Resend button
             if (_isResending)
               const CircularProgressIndicator()
-            else if (!_canResend)
+            else if (_isLinkActive)
               Text(
-                'Gửi lại sau $_cooldownSeconds giây',
+                'Link expires in $_cooldownSeconds seconds',
                 style: AppTextStyle.withColor(
                   AppTextStyle.bodyMedium,
                   Colors.grey,
@@ -178,9 +240,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               )
             else
               TextButton.icon(
-                onPressed: _resendEmail,
+                onPressed: _canResend ? _resendEmail : null,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Gửi lại email xác nhận'),
+                label: const Text('Resend verification email'),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
@@ -188,14 +250,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   ),
                 ),
               ),
-            
+
             const Spacer(),
-            
+
             // Main button
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: () => Get.offAll(() => const SigninScreen()),
+                onPressed: _isChecking ? null : _checkVerification,
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Theme.of(context).primaryColor,
@@ -204,7 +266,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                   ),
                 ),
                 child: Text(
-                  'Tôi đã xác nhận',
+                  _isChecking ? 'Checking...' : 'I have verified',
                   style: AppTextStyle.withColor(
                     AppTextStyle.buttonMedium,
                     Colors.white,
@@ -212,14 +274,14 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 12),
-            
+
             // Back to sign in
             TextButton(
               onPressed: () => Get.offAll(() => const SigninScreen()),
               child: Text(
-                'Quay về đăng nhập',
+                'Back to Sign In',
                 style: AppTextStyle.withColor(
                   AppTextStyle.buttonMedium,
                   Theme.of(context).primaryColor,

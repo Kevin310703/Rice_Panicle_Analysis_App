@@ -4,7 +4,6 @@ import 'package:rice_panicle_analysis_app/controllers/navigation_controller.dart
 import 'package:rice_panicle_analysis_app/controllers/theme_controller.dart';
 import 'package:rice_panicle_analysis_app/features/account_screen.dart';
 import 'package:rice_panicle_analysis_app/features/home_screen.dart';
-import 'package:rice_panicle_analysis_app/features/bookmark_screen.dart';
 import 'package:rice_panicle_analysis_app/features/list_project_screen.dart';
 import 'package:rice_panicle_analysis_app/features/widgets/custom_bottom_navbar.dart';
 
@@ -28,7 +27,7 @@ class MainScreen extends StatelessWidget {
                 // Add your main screen widgets here
                 HomeScreen(),
                 ListProjectScreen(),
-                BookmarkScreen(),
+                // BookmarkScreen(),
                 AccountScreen(),
               ],
             ),

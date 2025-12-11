@@ -1,36 +1,28 @@
-import 'package:rice_panicle_analysis_app/features/notifications/models/notification_type.dart';
+import 'package:rice_panicle_analysis_app/features/notifications/models/notification.dart';
+import 'package:rice_panicle_analysis_app/services/notification_supabase_service.dart';
 
 class NotificationRepository {
-  List<NotificationItem> getNotifications() {
-    return [
-      NotificationItem(
-        title: 'New Project Assigned',
-        message: 'You have been assigned a new project: Rice Yield Analysis.',
-        time: '2 hours ago',
-        type: NotificationType.project,
-        isRead: true,
-      ),
-      NotificationItem(
-        title: 'Special Promotion',
-        message: 'Get 20% off on premium features. Limited time offer!',
-        time: '1 day ago',
-        type: NotificationType.promo,
-        isRead: true,
-      ),
-      NotificationItem(
-        title: 'Project Deadline Reminder',
-        message: 'Reminder: The deadline for the Rice Yield Analysis project is tomorrow.',
-        time: '3 days ago',
-        type: NotificationType.project,
-        isRead: false,
-      ),
-      NotificationItem(
-        title: 'New Feature Released',
-        message: 'Check out the new image enhancement feature in the app!',
-        time: '5 days ago',
-        type: NotificationType.promo,
-        isRead: false,
-      ),
-    ];
+  Future<List<NotificationItem>> fetchNotifications({
+    required String userId,
+  }) {
+    return NotificationSupabaseService.fetchNotifications(userId: userId);
+  }
+
+  Future<void> markAllAsRead(String userId) {
+    return NotificationSupabaseService.markAllAsRead(userId);
+  }
+
+  Future<void> pushNotification({
+    required String userId,
+    required NotificationType type,
+    required String title,
+    required String message,
+  }) {
+    return NotificationSupabaseService.createNotification(
+      userId: userId,
+      type: type,
+      title: title,
+      message: message,
+    );
   }
 }

@@ -12,9 +12,13 @@ class SupabaseAuthService {
   static SupabaseClient get _client => Supabase.instance.client;
   static const String _profileBucket = 'images';
   static const String _profileFolder = 'avatar';
+  static String get _authRedirectUri => kIsWeb
+      ? '${Uri.base.origin}/auth/callback'
+      : 'io.supabase.flutterquickstart://login-callback/';
 
   static User? get currentUser => _client.auth.currentUser;
-  static Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
+  static Stream<AuthState> get authStateChanges =>
+      _client.auth.onAuthStateChange;
 
   static Future<AuthResult> signUpWithEmailAndPassword({
     required String email,
@@ -27,9 +31,7 @@ class SupabaseAuthService {
         email: email,
         password: password,
         data: {'full_name': name},
-        emailRedirectTo: kIsWeb
-            ? '${Uri.base.origin}/auth/callback'
-            : 'io.supabase.flutterquickstart://login-callback/',
+        emailRedirectTo: _authRedirectUri,
       );
 
       final session = response.session;
@@ -76,13 +78,11 @@ class SupabaseAuthService {
         );
       }
 
-      await _client.auth.resend(
-        type: OtpType.signup,
-        email: userEmail,
-        emailRedirectTo: kIsWeb
-            ? '${Uri.base.origin}/auth/callback'
-            : 'io.supabase.flutterquickstart://login-callback/',
-      );
+        await _client.auth.resend(
+          type: OtpType.signup,
+          email: userEmail,
+          emailRedirectTo: _authRedirectUri,
+        );
 
       return AuthResult(
         true,
@@ -156,11 +156,14 @@ class SupabaseAuthService {
 
   static Future<AuthResult> sendPasswordResetEmail(String email) async {
     try {
-      await _client.auth.resetPasswordForEmail(email);
+      await _client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: _authRedirectUri,
+      );
       return AuthResult(
         false,
         success: true,
-        message: 'Đã gửi hướng dẫn đặt lại mật khẩu tới $email',
+        message: 'Password reset instructions sent to $email',
       );
     } on AuthException catch (e) {
       return AuthResult(false, success: false, message: e.message);
@@ -168,7 +171,49 @@ class SupabaseAuthService {
       return AuthResult(
         false,
         success: false,
-        message: 'Không thể gửi email đặt lại mật khẩu.',
+        message: 'Unable to send password reset email.',
+      );
+    }
+  }
+
+  static Future<AuthResult> completePasswordRecovery(
+    String newPassword,
+  ) async {
+    final user = currentUser;
+    if (user == null || user.email == null) {
+      return AuthResult(
+        false,
+        success: false,
+        message: 'Recovery session expired. Please request a new email.',
+      );
+    }
+
+    try {
+      await _client.auth.updateUser(
+        UserAttributes(password: newPassword),
+      );
+
+      final profile =
+          await UserSupabaseService.fetchProfileByEmail(user.email!);
+      if (profile != null && profile.id != null) {
+        await UserSupabaseService.updatePasswordHash(
+          id: profile.id!,
+          passwordHash: _hashPassword(user.id, newPassword),
+        );
+      }
+
+      return AuthResult(
+        false,
+        success: true,
+        message: 'Password has been reset successfully.',
+      );
+    } on AuthException catch (e) {
+      return AuthResult(false, success: false, message: e.message);
+    } catch (e) {
+      return AuthResult(
+        false,
+        success: false,
+        message: 'Unable to reset password. Please try again.',
       );
     }
   }
